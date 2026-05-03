@@ -21,8 +21,10 @@ export const SHOP_PERMISSION_OPTIONS = [
   { id: 'shop.dashboard.view', name: 'Dashboard' },
   { id: 'shop.profile.view', name: 'Profile' },
   { id: 'shop.catalog.view', name: 'Catalog' },
+  { id: 'shop.delivery_partners.manage', name: 'Delivery Partners' },
   { id: 'shop.orders.view', name: 'Orders' },
   { id: 'shop.finance.view', name: 'Finance' },
+  { id: 'shop.notifications.view', name: 'Notifications' },
 ];
 
 function currentUser(): CurrentUser | null {

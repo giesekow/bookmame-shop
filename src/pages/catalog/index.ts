@@ -7,6 +7,31 @@ import { shopCategoriesCollection } from '../categories'
 import { shopProductImagesCollection } from '../product-images'
 import { shopProductVariantsCollection } from '../product-variants'
 
+function productAttributesField(storage = 'attributes', label = 'Product Attributes') {
+  return $FD({ label, storage, type: 'collection', cols: 12, hint: 'Structured label and value rows shown to customers before the description section.' }, {
+    headers() {
+      return [
+        { title: 'Label', value: 'label' },
+        { title: 'Value', value: 'value' },
+        { title: 'Sort Order', value: 'sortOrder' },
+      ]
+    },
+    form() {
+      return $FM({}, {
+        children: () => [
+          $PT({}, {
+            children: () => [
+              $FD({ label: 'Label', storage: 'label', type: 'text', required: true }),
+              $FD({ label: 'Value', storage: 'value', type: 'text', required: true }),
+              $FD({ label: 'Sort Order', storage: 'sortOrder', type: 'integer' }),
+            ],
+          }),
+        ],
+      })
+    },
+  })
+}
+
 function getShopId() {
   const shopId = useAppStore().shop?.id
   if (!shopId) {
@@ -32,6 +57,23 @@ async function fetchCategoryOptions() {
     id: item.id,
     name: item.name,
   }))
+}
+
+async function fetchDeliveryPartnerOptions() {
+  const response = await Api.instance.service(`shops/${getShopId()}/delivery-partners`).find({
+    query: {
+      $paginate: false,
+      $sort: { priorityRank: 1, createdAt: 1 },
+    },
+  }) as any
+
+  const items = Array.isArray(response) ? response : (Array.isArray(response?.data) ? response.data : [])
+  return items
+    .filter((item: any) => item?.deliveryCompanyId)
+    .map((item: any) => ({
+      id: item.deliveryCompanyId,
+      name: item.deliveryCompany?.name || item.deliveryCompanyId,
+    }))
 }
 
 const trigger = () => $TG({
@@ -65,6 +107,9 @@ const createForm = () => {
       default: () => useAppStore().shop?.defaultCurrencyCode,
     }),
     $FD({ label: 'Inventory Quantity', type: 'integer', storage: 'inventoryQuantity' }),
+    $FD({ label: 'Applicable Delivery Partners', type: 'select', storage: 'applicableDeliveryCompanyIds', multiple: true, cols: 12, hint: 'Leave empty to inherit all active shop delivery partners. Select specific partners only when a product needs delivery restrictions.' }, {
+      selectOptions: async () => fetchDeliveryPartnerOptions(),
+    }),
     $FD({ label: 'Sort Order', type: 'integer', storage: 'sortOrder' }),
     $FD({ label: 'Status', type: 'select', storage: 'status' }, {
       selectOptions: makeConstantOptions('shop-product-statuses'),
@@ -72,6 +117,7 @@ const createForm = () => {
     $FD({ label: 'Enabled', type: 'boolean', storage: 'enabled' }),
     $FD({ label: 'Available', type: 'boolean', storage: 'isAvailable' }),
     $FD({ label: 'Primary Image', type: 'image', storage: 'image' }),
+    productAttributesField(),
   ]
 
   return $FM({

@@ -15,6 +15,7 @@ export const createShopSwitchSelector = async () => {
       if (switched) {
         currentSelector.forceCancel();
         AppManager.reload();
+        location.reload()
       }
     },
     load: async () => {

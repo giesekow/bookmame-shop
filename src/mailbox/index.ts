@@ -1,7 +1,11 @@
 import { Api, AppManager, Dialogs, Mailbox, type MailboxItem } from 'vuetify-extended'
 import { shopOrdersReport } from '../pages/orders'
+import { openShopSettlementBatchReport } from '../pages/settlement-batches'
+import { supportCaseReport } from '../pages/support-cases'
 
 const APP_CLIENT_ID = 'bookmame-shop'
+const STORAGE_KEY = 'bookmame-shop-current-shop-id'
+const ENTITY_SERVICE_NAMESPACE = 'shops/'
 const SOCKET_EVENT_REF = Symbol('bookmame-shop-mailbox-events')
 const SOCKET_CONNECT_REF = Symbol('bookmame-shop-mailbox-connect')
 
@@ -11,6 +15,7 @@ type NotificationRecord = {
   body?: string | null
   icon?: string | null
   category?: string | null
+  eventType?: string | null
   targetApp?: string | null
   sourceService?: string | null
   sourceEntityId?: string | null
@@ -24,6 +29,32 @@ let socketBound = false
 
 function hasUsableApiSession() {
   return Boolean(Api.instance.tokenRef?.value && Api.instance.userRef?.value)
+}
+
+function getActiveShopId() {
+  const shopId = localStorage.getItem(STORAGE_KEY)
+  return shopId?.trim() ? shopId.trim() : null
+}
+
+function getActiveSourceServicePrefix() {
+  const shopId = getActiveShopId()
+  return shopId ? `shops/${shopId}/` : null
+}
+
+function notificationMatchesActiveScope(notification: NotificationRecord | undefined) {
+  const sourceServicePrefix = getActiveSourceServicePrefix()
+
+  if (!sourceServicePrefix) {
+    return true
+  }
+
+  const sourceService = String(notification?.sourceService || '').trim()
+
+  if (!sourceService || !sourceService.startsWith(ENTITY_SERVICE_NAMESPACE)) {
+    return true
+  }
+
+  return sourceService.startsWith(sourceServicePrefix)
 }
 
 function normalizeItems(payload: any): NotificationRecord[] {
@@ -78,6 +109,29 @@ function getOrderIdFromNotification(item: MailboxItem) {
   return String(raw.sourceEntityId)
 }
 
+function getSettlementBatchFromNotification(item: MailboxItem) {
+  const raw = item?.meta?.raw as NotificationRecord | undefined
+  if (!raw?.sourceEntityId) return null
+  if (!String(raw.sourceService || '').includes('/settlement-batches')) return null
+  const isRemittance = String(raw.eventType || '').includes('remittance')
+  return { id: String(raw.sourceEntityId), flowType: isRemittance ? 'remittance' : 'payout' } as const
+}
+
+function getSupportCaseIdFromNotification(item: MailboxItem) {
+  const raw = item?.meta?.raw as NotificationRecord | undefined
+
+  if (!raw?.sourceEntityId) {
+    return null
+  }
+
+  const sourceService = String(raw.sourceService || '')
+  if (!sourceService.includes('support-cases')) {
+    return null
+  }
+
+  return String(raw.sourceEntityId)
+}
+
 async function loadMailboxPage({ page, pageSize }: { page: number; pageSize: number }) {
   if (!hasUsableApiSession()) {
     return { items: [], total: 0 }
@@ -86,6 +140,12 @@ async function loadMailboxPage({ page, pageSize }: { page: number; pageSize: num
   const response = await Api.instance.service('notifications').find({
     query: {
       targetApp: APP_CLIENT_ID,
+      ...(getActiveSourceServicePrefix()
+        ? {
+            sourceServicePrefix: getActiveSourceServicePrefix(),
+            sourceServiceNamespace: ENTITY_SERVICE_NAMESPACE,
+          }
+        : {}),
       $paginate: false,
       $sort: {
         createdAt: -1,
@@ -93,7 +153,9 @@ async function loadMailboxPage({ page, pageSize }: { page: number; pageSize: num
     },
   }) as any
 
-  const allItems = normalizeItems(response).map(toMailboxItem)
+  const allItems = normalizeItems(response)
+    .filter(notificationMatchesActiveScope)
+    .map(toMailboxItem)
   const skip = Math.max(0, (page - 1) * pageSize)
 
   return {
@@ -110,6 +172,12 @@ async function loadUnreadCount() {
   const response = await Api.instance.service('notifications/unread-count').find({
     query: {
       targetApp: APP_CLIENT_ID,
+      ...(getActiveSourceServicePrefix()
+        ? {
+            sourceServicePrefix: getActiveSourceServicePrefix(),
+            sourceServiceNamespace: ENTITY_SERVICE_NAMESPACE,
+          }
+        : {}),
     },
   }) as any
 
@@ -142,9 +210,24 @@ async function removeMany(items: MailboxItem[]) {
 
 async function viewItem(item: MailboxItem) {
   const orderId = getOrderIdFromNotification(item)
+  const settlementBatch = getSettlementBatchFromNotification(item)
+  const supportCaseId = getSupportCaseIdFromNotification(item)
+
+  if (settlementBatch) {
+    openShopSettlementBatchReport(settlementBatch.id, settlementBatch.flowType)
+    return undefined
+  }
 
   if (orderId) {
     const report = shopOrdersReport(orderId)()
+    report.$params.mode = 'display'
+    await report.$master?.$load()
+    AppManager.showReport(report)
+    return undefined
+  }
+
+  if (supportCaseId) {
+    const report = supportCaseReport(supportCaseId)()
     report.$params.mode = 'display'
     await report.$master?.$load()
     AppManager.showReport(report)
@@ -171,6 +254,10 @@ function bindRealtime() {
       }
 
       if (routed?.data?.targetApp && routed.data.targetApp !== APP_CLIENT_ID) {
+        return
+      }
+
+      if (!notificationMatchesActiveScope(routed?.data)) {
         return
       }
 

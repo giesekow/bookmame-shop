@@ -1,11 +1,19 @@
 import { $MI, AppManager, Menu } from 'vuetify-extended';
-import { shopAccess } from '../misc/access';
+import { shopAccess, shopHasAccess } from '../misc/access';
+import { openProductCatalogDialog } from '../misc/product-catalog';
 import { SHOP_DASHBOARD_WIDGET } from '../pages/dashboard';
 import { shopCategoriesMenu } from '../pages/categories';
 import { shopCatalogMenu } from '../pages/catalog';
+import { shopDeliveryPartnersMenu } from '../pages/delivery-partners';
 import { shopFinanceSummaryReport } from '../pages/finance-summary';
+import { shopNotificationPreferencesReport } from '../pages/notification-preferences';
 import { shopOrdersCollection } from '../pages/orders';
+import { shopRatingsCollection } from '../pages/ratings';
 import { shopProfileReport } from '../pages/profile';
+import { supportCasesCollection } from '../pages/support-cases';
+import { shopCancellationRefundsCollection } from '../pages/cancellation-refunds';
+import { shopRemittanceBatchesCollection, shopSettlementBatchesCollection } from '../pages/settlement-batches';
+import { shopRemittanceHistoryCollection, shopSettlementHistoryCollection } from '../pages/settlement-history';
 
 export function buildHomeMenu() {
   return new Menu(
@@ -42,35 +50,56 @@ export function buildHomeMenu() {
           text: 'Orders',
           icon: 'mdi-cart-outline',
           shortcut: 'O',
-          action: 'function',
+          action: 'collection',
+          mode: 'display',
           color: 'info',
         }, {
-          callback: async () => {
-            AppManager.showCollection(shopOrdersCollection());
-          },
+          collection: shopOrdersCollection(),
+          access: shopAccess('shop.orders.view'),
+        }),
+        $MI({
+          text: 'Ratings',
+          icon: 'mdi-star-circle-outline',
+          shortcut: 'R',
+          action: 'collection',
+          mode: 'display',
+          color: 'info',
+        }, {
+          collection: shopRatingsCollection,
+          access: shopAccess('shop.orders.view'),
+        }),
+        $MI({
+          text: 'Support Cases',
+          icon: 'mdi-lifebuoy',
+          shortcut: 'U',
+          action: 'collection',
+          mode: 'display',
+          color: 'warning',
+        }, {
+          collection: supportCasesCollection,
           access: shopAccess('shop.orders.view'),
         }),
         $MI({
           text: 'Finance',
           icon: 'mdi-currency-usd',
           shortcut: 'F',
-          action: 'report',
-          mode: 'display',
+          action: 'menu',
           color: 'secondary',
         }, {
-          report: shopFinanceSummaryReport,
+          menu: buildFinanceMenu,
           access: shopAccess('shop.finance.view'),
         }),
         $MI({
-          text: 'Profile',
-          icon: 'mdi-store-cog-outline',
-          shortcut: 'P',
-          action: 'report',
-          mode: 'display',
+          text: 'Settings',
+          icon: 'mdi-cog-outline',
+          shortcut: 'S',
+          action: 'menu',
           color: 'warning',
         }, {
-          report: shopProfileReport,
-          access: shopAccess('shop.profile.view'),
+          menu: buildSettingsMenu,
+          access: async () =>
+            (await shopHasAccess('shop.profile.view')) ||
+            (await shopHasAccess('shop.notifications.view')),
         }),
       ],
     },
@@ -104,6 +133,138 @@ const buildCatalogMenu = () => new Menu(
       }, {
         menu: shopCategoriesMenu,
         access: shopAccess('shop.catalog.view'),
+      }),
+      $MI({
+        text: 'Print Product Catalog',
+        icon: 'mdi-printer-outline',
+        shortcut: 'P',
+        action: 'function',
+        color: 'error',
+      }, {
+        callback: async () => { openProductCatalogDialog() },
+        access: shopAccess('shop.catalog.view'),
+      }),
+    ],
+  },
+);
+
+const buildFinanceMenu = () => new Menu(
+  {
+    title: 'Finance',
+    cols: 12,
+    width: 320,
+  },
+  {
+    children: async () => [
+      $MI({
+        text: 'Finance Summary',
+        icon: 'mdi-cash-register',
+        shortcut: 'F',
+        action: 'report',
+        mode: 'display',
+        color: 'primary',
+      }, {
+        report: shopFinanceSummaryReport,
+        access: shopAccess('shop.finance.view'),
+      }),
+      $MI({
+        text: 'Settlement Batches',
+        icon: 'mdi-cash-sync',
+        shortcut: 'B',
+        action: 'collection',
+        mode: 'display',
+        color: 'warning',
+      }, {
+        collection: shopSettlementBatchesCollection,
+        access: shopAccess('shop.finance.view'),
+      }),
+      $MI({
+        text: 'Remittance Batches',
+        icon: 'mdi-cash-refund',
+        shortcut: 'R',
+        action: 'collection',
+        mode: 'display',
+        color: 'info',
+      }, {
+        collection: shopRemittanceBatchesCollection,
+        access: shopAccess('shop.finance.view'),
+      }),
+      $MI({
+        text: 'Remittance History',
+        icon: 'mdi-history',
+        shortcut: 'Y',
+        action: 'collection',
+        mode: 'display',
+        color: 'secondary',
+      }, {
+        collection: shopRemittanceHistoryCollection,
+        access: shopAccess('shop.finance.view'),
+      }),
+      $MI({
+        text: 'Settlement History',
+        icon: 'mdi-bank-transfer',
+        shortcut: 'T',
+        action: 'collection',
+        mode: 'display',
+        color: 'secondary',
+      }, {
+        collection: shopSettlementHistoryCollection,
+        access: shopAccess('shop.finance.view'),
+      }),
+      $MI({
+        text: 'Cancellation Refunds',
+        icon: 'mdi-cash-remove',
+        shortcut: 'C',
+        action: 'collection',
+        mode: 'display',
+        color: 'error',
+      }, {
+        collection: shopCancellationRefundsCollection,
+        access: shopAccess('shop.finance.view'),
+      }),
+    ],
+  },
+);
+
+const buildSettingsMenu = () => new Menu(
+  {
+    title: 'Settings',
+    cols: 12,
+    width: 320,
+  },
+  {
+    children: async () => [
+      $MI({
+        text: 'Profile',
+        icon: 'mdi-store-cog-outline',
+        shortcut: 'P',
+        action: 'report',
+        mode: 'display',
+        color: 'primary',
+      }, {
+        report: shopProfileReport,
+        access: shopAccess('shop.profile.view'),
+      }),
+      $MI({
+        text: 'Delivery Partners',
+        icon: 'mdi-truck-fast-outline',
+        shortcut: 'D',
+        action: 'menu',
+        color: 'success',
+      }, {
+        menu: shopDeliveryPartnersMenu,
+        access: shopAccess('shop.delivery_partners.manage'),
+      }),
+      $MI({
+        text: 'Notifications',
+        icon: 'mdi-bell-ring-outline',
+        shortcut: 'N',
+        action: 'report',
+        mode: 'display',
+        color: 'secondary',
+      }, {
+        report: shopNotificationPreferencesReport,
+        access: shopAccess('shop.notifications.view'),
       }),
     ],
   },

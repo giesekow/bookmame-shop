@@ -6,6 +6,31 @@ function servicePath(shopId: string, productId: string) {
   return `shops/${shopId}/products/${productId}/variants`
 }
 
+function variantAttributesField(storage = 'attributes', label = 'Variant Attributes') {
+  return $FD({ label, storage, type: 'collection', cols: 12, hint: 'Use this for structured variant-specific details such as color, size, storage, or pack size.' }, {
+    headers() {
+      return [
+        { title: 'Label', value: 'label' },
+        { title: 'Value', value: 'value' },
+        { title: 'Sort Order', value: 'sortOrder' },
+      ]
+    },
+    form() {
+      return $FM({}, {
+        children: () => [
+          $PT({}, {
+            children: () => [
+              $FD({ label: 'Label', storage: 'label', type: 'text', required: true }),
+              $FD({ label: 'Value', storage: 'value', type: 'text', required: true }),
+              $FD({ label: 'Sort Order', storage: 'sortOrder', type: 'integer' }),
+            ],
+          }),
+        ],
+      })
+    },
+  })
+}
+
 export const shopProductVariantsReport = (shopId: string, productId: string) => $RP({
   title: 'Product Variant',
   objectType: servicePath(shopId, productId),
@@ -28,6 +53,7 @@ export const shopProductVariantsReport = (shopId: string, productId: string) => 
           $FD({ label: 'Inventory Quantity', type: 'integer', storage: 'inventoryQuantity' }),
           $FD({ label: 'Sort Order', type: 'integer', storage: 'sortOrder' }),
           $FD({ label: 'Variant Image', type: 'image', storage: 'image' }),
+          variantAttributesField(),
         ],
       }),
     ],
