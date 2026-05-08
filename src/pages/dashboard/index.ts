@@ -606,3 +606,22 @@ export const SHOP_DASHBOARD_WIDGET = $DB({
     void dashboard.refresh()
   },
 })
+
+export function applyShopDashboardThemeMode(mode: 'light' | 'dark') {
+  const params = (SHOP_DASHBOARD_WIDGET as any)?.$params
+  if (!params) return
+
+  if (mode === 'dark') {
+    params.theme = 'dark'
+    params.backgroundColor = '#11171d'
+    params.backgroundGradient =
+      'radial-gradient(circle at top left, rgba(232,122,63,0.18), transparent 30%), radial-gradient(circle at 85% 15%, rgba(242,195,91,0.14), transparent 24%), radial-gradient(circle at bottom right, rgba(45,143,122,0.16), transparent 26%), linear-gradient(180deg, #1a2027 0%, #151b22 46%, #11171d 100%)'
+    params.textColor = '#e2e8f0'
+    return
+  }
+
+  params.theme = 'light'
+  params.backgroundColor = '#f7fbf5'
+  params.backgroundGradient = 'linear-gradient(180deg, rgba(251,255,249,0.98) 0%, rgba(239,247,234,0.94) 100%)'
+  params.textColor = '#183022'
+}
