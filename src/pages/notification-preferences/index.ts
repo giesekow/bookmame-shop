@@ -1,4 +1,5 @@
 import { $BN, $FD, $FM, $PT, $RP, Api, Dialogs, Field, Part } from 'vuetify-extended'
+import { shopAccess } from '../../misc/access'
 
 const REPORT_TOKEN = 'shop-notification-preferences'
 let activePreferenceReport: any = null
@@ -214,6 +215,7 @@ export const shopNotificationPreferencesReport = () => {
           children: () => fields,
         }),
       ],
+      access: shopAccess('shop.notifications.view'),
     }),
     sideButtons: () => [
       $BN({ text: 'Reload', color: 'secondary' }, {
@@ -229,5 +231,6 @@ export const shopNotificationPreferencesReport = () => {
       bindPreferenceEvents()
       void loadPreferences(report)
     },
+    access: shopAccess('shop.notifications.view'),
   })
 }

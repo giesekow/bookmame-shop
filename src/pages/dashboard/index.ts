@@ -168,15 +168,19 @@ function ratingValue(value?: number | null) {
 }
 
 function openOrdersCollection() {
-  AppManager.showCollection(shopOrdersCollection())
+  const coll = shopOrdersCollection()()
+  coll.$params.mode = 'display'
+  AppManager.showCollection(coll)
 }
 
 function openPendingOrdersCollection() {
-  AppManager.showCollection(shopOrdersCollection({
+  const coll = shopOrdersCollection({
     orderStatus: {
       $in: ['placed', 'accepted', 'ready_for_pickup'],
     },
-  }))
+  })()
+  coll.$params.mode = 'display'
+  AppManager.showCollection(coll)
 }
 
 function openOrder(orderId?: string) {
