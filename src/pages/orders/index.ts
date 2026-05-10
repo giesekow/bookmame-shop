@@ -777,7 +777,7 @@ export const shopOrdersReport = (orderId?: string) => () => $RP({
       }
     }
 
-    if (['accepted', 'ready_for_pickup'].includes(String(statusRef.value || ''))) {
+    if (['placed', 'accepted', 'ready_for_pickup'].includes(String(statusRef.value || ''))) {
       buttons.push(cancelButton(report, statusRef));
       buttons.push(failButton(report, statusRef));
     }

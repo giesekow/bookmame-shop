@@ -471,5 +471,6 @@ export function openShopSettlementBatchReport(batchId: string, flowType: BatchFl
   const rep = createBatchReport(flowType)
   rep.$params.objectId = batchId
   rep.$params.mode = 'display'
+  rep.$params.objectType = servicePath()
   AppManager.showReport(rep)
 }

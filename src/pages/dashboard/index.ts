@@ -450,7 +450,7 @@ export const SHOP_DASHBOARD_WIDGET = $DB({
       icon: 'mdi-bank-transfer-out',
       cols: 12,
       md: 6,
-      lg: 3,
+      lg: 6,
       color: '#ffffff',
       cardStyle: { border: '1px solid #dbead4' },
     }, {
