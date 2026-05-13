@@ -132,6 +132,13 @@ function canShopCollectPayment(order: any) {
   return fulfillmentMethod === 'customer_pickup' && ['cash_on_pickup', 'card_on_pickup'].includes(paymentMethod);
 }
 
+function isOnlinePickupAwaitingPayment(order: any) {
+  const fulfillmentMethod = String(order?.fulfillmentMethod || '').trim().toLowerCase();
+  const paymentMethod = String(order?.paymentMethod || '').trim().toLowerCase();
+  const paymentStatus = String(order?.paymentStatus || '').trim().toLowerCase();
+  return fulfillmentMethod === 'customer_pickup' && ['paystack', 'hubtel', 'online_demo'].includes(paymentMethod) && paymentStatus !== 'paid';
+}
+
 function shopSettlementBeneficiaryLabel(order: any, settlement: any) {
   const beneficiaryType = String(settlement?.beneficiaryType || 'platform').trim().toLowerCase();
 
@@ -479,11 +486,18 @@ function confirmPickupHandoffPinButton(report: Report, pickupHandoffStatusRef: R
   });
 }
 
-function completeButton(report: Report, statusRef: Ref<any>, paymentStatusRef: Ref<any>) {
-  return $BN({ text: 'Complete', color: 'secondary' }, {
+function completeButton(report: Report, statusRef: Ref<any>, paymentStatusRef: Ref<any>, orderData: any) {
+  const shouldCollectPayment = canShopCollectPayment(orderData) && String(paymentStatusRef.value || '').trim().toLowerCase() !== 'paid';
+
+  return $BN({ text: shouldCollectPayment ? 'Complete & Collect Payment' : 'Complete Pickup', color: 'secondary' }, {
     onClicked: async (button) => {
       const orderId = String(button.$master?.$get('id') || '');
       const pickupConfirmationCode = button.$master?.$get('pickupConfirmationCode');
+
+      if (isOnlinePickupAwaitingPayment(button.$master?.$data || orderData)) {
+        Dialogs.$error('This pickup order uses online payment. The customer must complete payment before the order can be completed.');
+        return;
+      }
 
       if (pickupConfirmationCode) {
         const dialog = new DialogForm({}, {
@@ -783,12 +797,15 @@ export const shopOrdersReport = (orderId?: string) => () => $RP({
     }
 
     if (statusRef.value === 'ready_for_pickup' && String(orderData.fulfillmentMethod || '').trim().toLowerCase() === 'customer_pickup') {
-      buttons.push(completeButton(report, statusRef, paymentStatusRef));
+      if (!isOnlinePickupAwaitingPayment(orderData)) {
+        buttons.push(completeButton(report, statusRef, paymentStatusRef, orderData));
+      }
     }
 
     if (
       canShopCollectPayment(orderData) &&
       String(paymentStatusRef.value || '').trim().toLowerCase() !== 'paid' &&
+      String(statusRef.value || '').trim().toLowerCase() !== 'ready_for_pickup' &&
       !['cancelled', 'failed', 'completed'].includes(String(statusRef.value || '').trim().toLowerCase())
     ) {
       buttons.push(markPickupPaymentPaidButton(report, paymentStatusRef));
