@@ -91,7 +91,6 @@ function buildCompactItemSummary(order: any) {
 function buildAddressCue(order: any) {
   const parts = [
     order?.deliveryLabel,
-    order?.deliveryGeoReferenceText,
     order?.deliveryAddressLine1,
     order?.deliveryAddressLine2,
     order?.deliveryLandmark,
@@ -100,6 +99,8 @@ function buildAddressCue(order: any) {
     .filter(Boolean)
 
   if (parts.length === 0) {
+    const geoRef = String(order?.deliveryGeoReferenceText || '').trim()
+    if (geoRef) return geoRef
     return order?.fulfillmentMethod === 'customer_pickup'
       ? String(order?.shop?.name || 'Shop pickup')
       : 'Address pending'

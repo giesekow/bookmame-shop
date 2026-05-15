@@ -314,16 +314,16 @@ function orderFulfillmentLabel(order: any) {
 }
 
 function orderDeliveryAddress(order: any) {
-  return [
+  const structured = [
     order?.deliveryLabel,
     order?.deliveryAddressLine1,
     order?.deliveryAddressLine2,
     order?.deliveryLandmark,
-    order?.deliveryGeoReferenceText,
   ]
     .map((part) => String(part || '').trim())
     .filter(Boolean)
-    .join(', ');
+  if (structured.length) return structured.join(', ')
+  return String(order?.deliveryGeoReferenceText || '').trim() || ''
 }
 
 function orderUpdateAuthor(update: any) {
