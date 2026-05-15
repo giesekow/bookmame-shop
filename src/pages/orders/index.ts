@@ -1,4 +1,5 @@
 import { $BN, $COL, $FD, $FM, $PT, $RP, $TG, Api, AppManager, Button, DialogForm, Dialogs, Report } from 'vuetify-extended';
+import { uploadAsset } from '@bookmame/web-utils';
 import { ref, Ref } from 'vue';
 import { shopAccess } from '../../misc/access';
 import { useAppStore } from '../../store/app';
@@ -105,6 +106,140 @@ function mergeAttributes(baseValue: unknown, variantValue: unknown) {
   return [...items.values()].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label));
 }
 
+function shopOrderReportStyles() {
+  return `
+    <style>
+      .shop-order-report {
+        --shop-report-bg: #f8fcf6;
+        --shop-report-card-bg: #ffffff;
+        --shop-report-border: #dbead4;
+        --shop-report-heading: #183022;
+        --shop-report-text: #183022;
+        --shop-report-muted: #5d7063;
+        --shop-report-label: #6a7f70;
+        --shop-report-danger: #7a3f38;
+        font-family: inherit;
+        color: var(--shop-report-text);
+        background: var(--shop-report-bg);
+        border: 1px solid var(--shop-report-border);
+        border-radius: 18px;
+        padding: 18px;
+      }
+
+      html[data-theme='dark'] .shop-order-report {
+        --shop-report-bg: rgba(21, 28, 36, 0.72);
+        --shop-report-card-bg: rgba(34, 41, 50, 0.92);
+        --shop-report-border: rgba(255, 255, 255, 0.1);
+        --shop-report-heading: rgba(246, 237, 226, 0.96);
+        --shop-report-text: rgba(246, 237, 226, 0.92);
+        --shop-report-muted: rgba(246, 237, 226, 0.72);
+        --shop-report-label: rgba(246, 237, 226, 0.68);
+        --shop-report-danger: #f2a49e;
+      }
+
+      .shop-order-report__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+
+      .shop-order-report__card,
+      .shop-order-report__section,
+      .shop-order-report__attributes,
+      .shop-order-report__settlement {
+        background: var(--shop-report-card-bg);
+        border: 1px solid var(--shop-report-border);
+        color: var(--shop-report-text);
+      }
+
+      .shop-order-report__card {
+        border-radius: 14px;
+        padding: 14px;
+      }
+
+      .shop-order-report__section {
+        border-radius: 14px;
+        padding: 0 14px;
+      }
+
+      .shop-order-report__label,
+      .shop-order-report__section-title,
+      .shop-order-report__attribute-label,
+      .shop-order-report__metric-label {
+        color: var(--shop-report-label);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+      }
+
+      .shop-order-report__section-title {
+        margin: 18px 0 8px;
+      }
+
+      .shop-order-report__value,
+      .shop-order-report__heading,
+      .shop-order-report__item-title,
+      .shop-order-report__metric-value {
+        color: var(--shop-report-heading);
+        font-weight: 800;
+      }
+
+      .shop-order-report__heading {
+        font-size: 20px;
+      }
+
+      .shop-order-report__muted,
+      .shop-order-report__item-meta,
+      .shop-order-report__empty {
+        color: var(--shop-report-muted);
+      }
+
+      .shop-order-report__danger {
+        color: var(--shop-report-danger);
+      }
+
+      .shop-order-report__item {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--shop-report-border);
+      }
+
+      .shop-order-report__item:last-child {
+        border-bottom: 0;
+      }
+
+      .shop-order-report__attributes {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 8px;
+        padding: 10px 12px;
+        border-radius: 14px;
+      }
+
+      .shop-order-report__attribute-row {
+        padding-top: 8px;
+        border-top: 1px solid var(--shop-report-border);
+      }
+
+      .shop-order-report__attribute-row:first-child {
+        border-top: 0;
+      }
+
+      .shop-order-report__attribute-value {
+        color: var(--shop-report-heading);
+        font-size: 13px;
+        font-weight: 800;
+        word-break: break-word;
+      }
+
+      .shop-order-report__settlement {
+        padding: 12px 14px;
+        border-radius: 12px;
+      }
+    </style>
+  `;
+}
+
 function renderAttributeSummary(baseValue: unknown, variantValue: unknown) {
   const pairs = mergeAttributes(baseValue, variantValue);
   if (!pairs.length) {
@@ -112,15 +247,15 @@ function renderAttributeSummary(baseValue: unknown, variantValue: unknown) {
   }
 
   return `
-    <div style="width:100%; box-sizing:border-box; margin-top:8px; padding:10px 12px; border-radius:14px; background:#f5f8f3; border:1px solid #dbead4;">
-      <div style="font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#6a7f70; margin-bottom:8px;">Attributes</div>
+    <div class="shop-order-report__attributes">
+      <div class="shop-order-report__label" style="font-size:11px; margin-bottom:8px;">Attributes</div>
       <div style="display:grid; gap:8px;">
         ${pairs.map((pair) => `
-          <div style="padding-top:8px; border-top:1px solid rgba(106,127,112,0.18);">
-            <div style="font-size:11px; letter-spacing:.05em; text-transform:uppercase; font-weight:700; color:#6a7f70; margin-bottom:4px;">${escapeHtml(pair.label)}</div>
-            <div style="font-size:13px; font-weight:700; color:#183022; word-break:break-word;">${escapeHtml(pair.value)}</div>
+          <div class="shop-order-report__attribute-row">
+            <div class="shop-order-report__attribute-label" style="font-size:11px; letter-spacing:.05em; font-weight:700; margin-bottom:4px;">${escapeHtml(pair.label)}</div>
+            <div class="shop-order-report__attribute-value">${escapeHtml(pair.value)}</div>
           </div>
-        `).join('').replace('border-top:1px solid rgba(106,127,112,0.18);', 'border-top:0;')}
+        `).join('')}
       </div>
     </div>
   `;
@@ -163,97 +298,165 @@ function shopSettlementBeneficiaryMeta(order: any, settlement: any) {
   return label === beneficiaryType ? beneficiaryType : `${beneficiaryType} · ${label}`;
 }
 
+function labelValue(value: unknown) {
+  return String(value || 'n/a').replace(/_/g, ' ');
+}
+
+function orderFulfillmentLabel(order: any) {
+  const method = String(order?.fulfillmentMethod || '').trim().toLowerCase();
+  if (method === 'delivery') {
+    return 'Delivery company';
+  }
+  if (method === 'customer_pickup') {
+    return 'Customer pickup';
+  }
+  return labelValue(method || 'n/a');
+}
+
+function orderDeliveryAddress(order: any) {
+  return [
+    order?.deliveryLabel,
+    order?.deliveryAddressLine1,
+    order?.deliveryAddressLine2,
+    order?.deliveryLandmark,
+    order?.deliveryGeoReferenceText,
+  ]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
+function orderUpdateAuthor(update: any) {
+  const type = String(update?.authorType || update?.createdByType || '').trim().toLowerCase();
+  if (['customer', 'buyer'].includes(type)) return 'Customer';
+  if (['shop', 'shop_staff', 'partner'].includes(type)) return 'Shop team';
+  if (type === 'admin') return 'Admin';
+  return update?.authorLabel || update?.authorAccountId || labelValue(type || 'update');
+}
+
 function renderOrderHtml(order: any) {
   const items = Array.isArray(order?.items) ? order.items : [];
   const settlements = Array.isArray(order?.settlements) ? order.settlements : [];
+  const updates = Array.isArray(order?.updates) ? order.updates : [];
+  const fulfillmentMethod = String(order?.fulfillmentMethod || '').trim().toLowerCase();
+  const deliveryCompanyName = order?.deliveryCompany?.name || order?.deliveryEstimateSnapshot?.deliveryCompanyName || '';
+  const deliveryAddress = orderDeliveryAddress(order);
   const itemsHtml = items.length
     ? items.map((item: any) => `
-      <div style="padding:12px 0; border-bottom:1px solid #e7ece2;">
+      <div class="shop-order-report__item">
         <div style="display:flex; justify-content:space-between; gap:12px;">
           <div style="flex:1 1 auto; min-width:0;">
-            <div style="font-weight:700; color:#183022;">${escapeHtml(item.quantity)}x ${escapeHtml(item.productName)}</div>
+            <div class="shop-order-report__item-title">${escapeHtml(item.quantity)}x ${escapeHtml(item.productName)}</div>
           </div>
-          <div style="font-weight:700; color:#183022; white-space:nowrap;">${escapeHtml(money(item.lineTotalAmount, item.currency || order?.currency))}</div>
+          <div class="shop-order-report__value" style="white-space:nowrap;">${escapeHtml(money(item.lineTotalAmount, item.currency || order?.currency))}</div>
         </div>
         <div style="display:flex; justify-content:space-between; gap:12px;">
           <div style="flex:1 1 auto; min-width:0;">
-            ${item.variantName ? `<div style="margin-top:4px; color:#5d7063; font-size:13px;">Variant: ${escapeHtml(item.variantName)}</div>` : ''}
-            ${item.variantSku ? `<div style="margin-top:4px; color:#5d7063; font-size:13px;">Variant SKU: ${escapeHtml(item.variantSku)}</div>` : ''}
-            ${item.categoryLabel ? `<div style="margin-top:4px; color:#5d7063; font-size:13px;">${escapeHtml(item.categoryLabel)}</div>` : ''}
+            ${item.variantName ? `<div class="shop-order-report__item-meta" style="margin-top:4px; font-size:13px;">Variant: ${escapeHtml(item.variantName)}</div>` : ''}
+            ${item.variantSku ? `<div class="shop-order-report__item-meta" style="margin-top:4px; font-size:13px;">Variant SKU: ${escapeHtml(item.variantSku)}</div>` : ''}
+            ${item.categoryLabel ? `<div class="shop-order-report__item-meta" style="margin-top:4px; font-size:13px;">${escapeHtml(item.categoryLabel)}</div>` : ''}
             ${renderAttributeSummary(item.productAttributesSnapshot, item.variantAttributesSnapshot)}
-            ${item.notes ? `<div style="margin-top:4px; color:#6d5b46; font-size:12px;">Note: ${escapeHtml(item.notes)}</div>` : ''}
+            ${item.notes ? `<div class="shop-order-report__muted" style="margin-top:4px; font-size:12px;">Note: ${escapeHtml(item.notes)}</div>` : ''}
           </div>
         </div>
       </div>
     `).join('')
-    : '<div style="padding:12px 0; color:#5d7063;">No items were returned for this order.</div>';
+    : '<div class="shop-order-report__empty" style="padding:12px 0;">No items were returned for this order.</div>';
 
   const settlementsHtml = settlements.length
     ? settlements.map((settlement: any) => `
-      <div style="padding:12px 14px; border:1px solid #dbead4; border-radius:12px; background:#fff;">
+      <div class="shop-order-report__settlement">
         <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px;">
           <div>
-            <div style="font-weight:800; color:#183022;">${escapeHtml(shopSettlementBeneficiaryLabel(order, settlement))}</div>
-            <div style="margin-top:4px; color:#6a7f70; font-size:12px; text-transform:uppercase; letter-spacing:.05em;">${escapeHtml(shopSettlementBeneficiaryMeta(order, settlement))}</div>
-            <div style="margin-top:4px; color:#5d7063; font-size:13px;">Status: ${escapeHtml(String(settlement?.status || 'n/a').replace(/_/g, ' '))}</div>
-            <div style="margin-top:4px; color:#5d7063; font-size:13px;">Eligible: ${escapeHtml(dateTime(settlement?.eligibleAt))}</div>
+            <div class="shop-order-report__value">${escapeHtml(shopSettlementBeneficiaryLabel(order, settlement))}</div>
+            <div class="shop-order-report__label" style="margin-top:4px; font-size:12px; letter-spacing:.05em;">${escapeHtml(shopSettlementBeneficiaryMeta(order, settlement))}</div>
+            <div class="shop-order-report__muted" style="margin-top:4px; font-size:13px;">Status: ${escapeHtml(String(settlement?.status || 'n/a').replace(/_/g, ' '))}</div>
+            <div class="shop-order-report__muted" style="margin-top:4px; font-size:13px;">Eligible: ${escapeHtml(dateTime(settlement?.eligibleAt))}</div>
           </div>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:10px; flex:1 1 360px;">
-            <div><div style="font-size:11px; color:#6a7f70; text-transform:uppercase;">Gross</div><div style="font-weight:700; color:#183022;">${escapeHtml(money(settlement?.grossAmount, settlement?.currency || order?.currency))}</div></div>
-            <div><div style="font-size:11px; color:#6a7f70; text-transform:uppercase;">Fee</div><div style="font-weight:700; color:#183022;">${escapeHtml(money(settlement?.feeAmount, settlement?.currency || order?.currency))}</div></div>
-            <div><div style="font-size:11px; color:#6a7f70; text-transform:uppercase;">Net</div><div style="font-weight:700; color:#183022;">${escapeHtml(money(settlement?.netAmount, settlement?.currency || order?.currency))}</div></div>
-            <div><div style="font-size:11px; color:#6a7f70; text-transform:uppercase;">Direct</div><div style="font-weight:700; color:#183022;">${escapeHtml(money(settlement?.directCollectedAmount, settlement?.currency || order?.currency))}</div></div>
-            <div><div style="font-size:11px; color:#6a7f70; text-transform:uppercase;">Payable</div><div style="font-weight:700; color:#183022;">${escapeHtml(money(settlement?.outstandingPayableAmount, settlement?.currency || order?.currency))}</div></div>
-            <div><div style="font-size:11px; color:#6a7f70; text-transform:uppercase;">Remittance</div><div style="font-weight:700; color:#183022;">${escapeHtml(money(settlement?.outstandingRemittanceAmount, settlement?.currency || order?.currency))}</div></div>
+            <div><div class="shop-order-report__metric-label" style="font-size:11px;">Gross</div><div class="shop-order-report__metric-value">${escapeHtml(money(settlement?.grossAmount, settlement?.currency || order?.currency))}</div></div>
+            <div><div class="shop-order-report__metric-label" style="font-size:11px;">Fee</div><div class="shop-order-report__metric-value">${escapeHtml(money(settlement?.feeAmount, settlement?.currency || order?.currency))}</div></div>
+            <div><div class="shop-order-report__metric-label" style="font-size:11px;">Net</div><div class="shop-order-report__metric-value">${escapeHtml(money(settlement?.netAmount, settlement?.currency || order?.currency))}</div></div>
+            <div><div class="shop-order-report__metric-label" style="font-size:11px;">Direct</div><div class="shop-order-report__metric-value">${escapeHtml(money(settlement?.directCollectedAmount, settlement?.currency || order?.currency))}</div></div>
+            <div><div class="shop-order-report__metric-label" style="font-size:11px;">Payable</div><div class="shop-order-report__metric-value">${escapeHtml(money(settlement?.outstandingPayableAmount, settlement?.currency || order?.currency))}</div></div>
+            <div><div class="shop-order-report__metric-label" style="font-size:11px;">Remittance</div><div class="shop-order-report__metric-value">${escapeHtml(money(settlement?.outstandingRemittanceAmount, settlement?.currency || order?.currency))}</div></div>
           </div>
         </div>
       </div>
     `).join('')
-    : '<div style="padding:12px 0; color:#5d7063;">No settlement ledger rows are available for this order yet.</div>'
+    : '<div class="shop-order-report__empty" style="padding:12px 0;">No settlement ledger rows are available for this order yet.</div>'
+
+  const updatesHtml = updates.length
+    ? updates.map((update: any) => `
+      <div class="shop-order-report__item">
+        <div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline;">
+          <div class="shop-order-report__value" style="font-weight:700;">${escapeHtml(orderUpdateAuthor(update))}</div>
+          <div class="shop-order-report__muted" style="font-size:12px;">${escapeHtml(dateTime(update?.createdAt))}</div>
+        </div>
+        <div class="shop-order-report__muted" style="margin-top:8px; white-space:pre-wrap;">${escapeHtml(update?.note || update?.message || '')}</div>
+        ${Array.isArray(update?.imageAssetIds) && update.imageAssetIds.length ? `<div class="shop-order-report__muted" style="margin-top:8px;">${escapeHtml(update.imageAssetIds.length)} image attachment(s)</div>` : ''}
+      </div>
+    `).join('')
+    : '<div class="shop-order-report__empty" style="padding:12px 0;">No seller/customer updates yet.</div>'
 
   return `
-    <div style="font-family:inherit; color:#183022; background:#f8fcf6; border:1px solid #dbead4; border-radius:18px; padding:18px;">
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:18px;">
-        <div style="background:#fff; border:1px solid #dbead4; border-radius:14px; padding:14px;">
-          <div style="font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#6a7f70; margin-bottom:8px;">Order</div>
-          <div style="font-weight:800; font-size:20px;">${escapeHtml(order?.orderNumber || 'Order')}</div>
-          <div style="margin-top:4px; color:#5d7063;">Placed ${escapeHtml(dateTime(order?.placedAt))}</div>
+    ${shopOrderReportStyles()}
+    <div class="shop-order-report">
+      <div class="shop-order-report__grid">
+        <div class="shop-order-report__card">
+          <div class="shop-order-report__label" style="margin-bottom:8px;">Order</div>
+          <div class="shop-order-report__heading">${escapeHtml(order?.orderNumber || 'Order')}</div>
+          <div class="shop-order-report__muted" style="margin-top:4px;">Placed ${escapeHtml(dateTime(order?.placedAt))}</div>
         </div>
-        <div style="background:#fff; border:1px solid #dbead4; border-radius:14px; padding:14px;">
-          <div style="font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#6a7f70; margin-bottom:8px;">Customer</div>
-          <div style="font-weight:700;">${escapeHtml(order?.customerDisplayName || order?.customerAccountId || 'Unknown customer')}</div>
-          ${order?.customerEmail ? `<div style="margin-top:4px; color:#5d7063;">${escapeHtml(order.customerEmail)}</div>` : ''}
-          ${order?.customerPhoneNumber ? `<div style="margin-top:4px; color:#5d7063;">${escapeHtml(order.customerPhoneNumber)}</div>` : ''}
+        <div class="shop-order-report__card">
+          <div class="shop-order-report__label" style="margin-bottom:8px;">Customer</div>
+          <div class="shop-order-report__value" style="font-weight:700;">${escapeHtml(order?.customerDisplayName || order?.customerAccountId || 'Unknown customer')}</div>
+          ${order?.customerEmail ? `<div class="shop-order-report__muted" style="margin-top:4px;">${escapeHtml(order.customerEmail)}</div>` : ''}
+          ${order?.customerPhoneNumber ? `<div class="shop-order-report__muted" style="margin-top:4px;">${escapeHtml(order.customerPhoneNumber)}</div>` : ''}
         </div>
-        <div style="background:#fff; border:1px solid #dbead4; border-radius:14px; padding:14px;">
-          <div style="font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#6a7f70; margin-bottom:8px;">Payment</div>
-          <div style="font-weight:700;">${escapeHtml(money(order?.totalAmount, order?.currency))}</div>
-          <div style="margin-top:4px; color:#5d7063;">Method: ${escapeHtml(String(order?.paymentMethod || 'n/a').replace(/_/g, ' '))}</div>
-          <div style="margin-top:4px; color:#5d7063;">Payment status: ${escapeHtml(String(order?.paymentStatus || 'pending').replace(/_/g, ' '))}</div>
+        <div class="shop-order-report__card">
+          <div class="shop-order-report__label" style="margin-bottom:8px;">Payment</div>
+          <div class="shop-order-report__value" style="font-weight:700;">${escapeHtml(money(order?.totalAmount, order?.currency))}</div>
+          <div class="shop-order-report__muted" style="margin-top:4px;">Method: ${escapeHtml(String(order?.paymentMethod || 'n/a').replace(/_/g, ' '))}</div>
+          <div class="shop-order-report__muted" style="margin-top:4px;">Payment status: ${escapeHtml(String(order?.paymentStatus || 'pending').replace(/_/g, ' '))}</div>
         </div>
-        <div style="background:#fff; border:1px solid #dbead4; border-radius:14px; padding:14px;">
-          <div style="font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#6a7f70; margin-bottom:8px;">Status</div>
-          <div style="font-weight:700;">${escapeHtml(String(order?.orderStatus || 'placed').replace(/_/g, ' '))}</div>
-          ${order?.pickupHandoffStatus ? `<div style="margin-top:4px; color:#5d7063;">Pickup handoff: ${escapeHtml(String(order.pickupHandoffStatus || 'not_requested').replace(/_/g, ' '))}</div>` : ''}
-          ${order?.deliveryConfirmationStatus ? `<div style="margin-top:4px; color:#5d7063;">Delivery confirmation: ${escapeHtml(String(order.deliveryConfirmationStatus || 'not_requested').replace(/_/g, ' '))}</div>` : ''}
-          ${order?.cancellationReason ? `<div style="margin-top:6px; color:#7a3f38; font-size:12px;">Cancel: ${escapeHtml(order.cancellationReason)}</div>` : ''}
-          ${order?.failedReason ? `<div style="margin-top:6px; color:#7a3f38; font-size:12px;">Failure: ${escapeHtml(order.failedReason)}</div>` : ''}
+        <div class="shop-order-report__card">
+          <div class="shop-order-report__label" style="margin-bottom:8px;">Fulfillment</div>
+          <div class="shop-order-report__value" style="font-weight:700;">${escapeHtml(orderFulfillmentLabel(order))}</div>
+          ${fulfillmentMethod === 'delivery' && deliveryCompanyName ? `<div class="shop-order-report__muted" style="margin-top:4px;">Delivery partner: ${escapeHtml(deliveryCompanyName)}</div>` : ''}
+          ${fulfillmentMethod === 'delivery' ? `<div class="shop-order-report__muted" style="margin-top:4px;">Delivery status: ${escapeHtml(labelValue(order?.deliveryStatus))}</div>` : ''}
+          ${fulfillmentMethod === 'delivery' && typeof order?.deliveryFeeAmount !== 'undefined' ? `<div class="shop-order-report__muted" style="margin-top:4px;">Delivery fee: ${escapeHtml(money(order.deliveryFeeAmount, order?.currency))}</div>` : ''}
+          ${fulfillmentMethod === 'delivery' && deliveryAddress ? `<div class="shop-order-report__muted" style="margin-top:4px;">Address: ${escapeHtml(deliveryAddress)}</div>` : ''}
+          ${fulfillmentMethod === 'customer_pickup' ? `<div class="shop-order-report__muted" style="margin-top:4px;">Customer will pick up from the shop.</div>` : ''}
+        </div>
+        <div class="shop-order-report__card">
+          <div class="shop-order-report__label" style="margin-bottom:8px;">Status</div>
+          <div class="shop-order-report__value" style="font-weight:700;">${escapeHtml(String(order?.orderStatus || 'placed').replace(/_/g, ' '))}</div>
+          ${order?.pickupHandoffStatus ? `<div class="shop-order-report__muted" style="margin-top:4px;">Pickup handoff: ${escapeHtml(String(order.pickupHandoffStatus || 'not_requested').replace(/_/g, ' '))}</div>` : ''}
+          ${order?.deliveryConfirmationStatus ? `<div class="shop-order-report__muted" style="margin-top:4px;">Delivery confirmation: ${escapeHtml(String(order.deliveryConfirmationStatus || 'not_requested').replace(/_/g, ' '))}</div>` : ''}
+          ${order?.cancellationReason ? `<div class="shop-order-report__danger" style="margin-top:6px; font-size:12px;">Cancel: ${escapeHtml(order.cancellationReason)}</div>` : ''}
+          ${order?.failedReason ? `<div class="shop-order-report__danger" style="margin-top:6px; font-size:12px;">Failure: ${escapeHtml(order.failedReason)}</div>` : ''}
         </div>
       </div>
 
       ${order?.notes ? `
-        <div style="margin-bottom:18px; padding:14px; border-radius:14px; background:#fff; border:1px solid #dbead4;">
-          <div style="font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#6a7f70; margin-bottom:8px;">Notes</div>
-          <div style="color:#5d7063; white-space:pre-wrap;">${escapeHtml(order.notes)}</div>
+        <div class="shop-order-report__card" style="margin-bottom:18px;">
+          <div class="shop-order-report__label" style="margin-bottom:8px;">Customer checkout note</div>
+          <div class="shop-order-report__muted" style="white-space:pre-wrap;">${escapeHtml(order.notes)}</div>
         </div>
       ` : ''}
 
-      <div style="font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#6a7f70; margin-bottom:8px;">Items</div>
-      <div style="background:#fff; border:1px solid #dbead4; border-radius:14px; padding:0 14px;">
+      <div class="shop-order-report__section-title">Seller / Customer notes</div>
+      <div class="shop-order-report__section">
+        ${updatesHtml}
+      </div>
+
+      <div class="shop-order-report__label" style="margin-bottom:8px;margin-top:16px;">Items</div>
+      <div class="shop-order-report__section">
         ${itemsHtml}
       </div>
 
-      <div style="margin-top:18px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#6a7f70; margin-bottom:8px;">Finance</div>
+      <div class="shop-order-report__section-title">Finance</div>
       <div style="display:grid; gap:12px;">
         ${settlementsHtml}
       </div>
@@ -284,8 +487,18 @@ export async function updateShopOrderView(master: any) {
       'customerEmail',
       'customerPhoneNumber',
       'fulfillmentMethod',
+      'deliveryCompany',
+      'deliveryCompany.name',
+      'deliveryFeeAmount',
       'deliveryStatus',
+      'deliveryLabel',
+      'deliveryAddressLine1',
+      'deliveryAddressLine2',
+      'deliveryLandmark',
+      'deliveryGeoReferenceText',
+      'deliveryEstimateSnapshot',
       'notes',
+      'updates',
       'cancellationReason',
       'failedReason',
       'placedAt',
@@ -348,7 +561,26 @@ function reasonDialog(title: string, label: string, onSubmit: (reason: string) =
   return dialog;
 }
 
-function notesDialog(title: string, initialNotes: string, onSubmit: (notes: string) => Promise<void>) {
+async function uploadImageAssetIds(form: any, imageField: string, purpose: string, entityId: string) {
+  const rawValue = form?.$master?.$get?.(imageField);
+  const images = Array.isArray(rawValue) ? rawValue : rawValue ? [rawValue] : [];
+  const assetIds: string[] = [];
+
+  for (const image of images) {
+    const uploaded = await uploadAsset(image, {
+      purpose,
+      isPublic: false,
+      entityType: 'shop_order',
+      entityId,
+    });
+    assetIds.push(uploaded.id);
+  }
+
+  form?.$master?.$set?.(imageField, null);
+  return assetIds;
+}
+
+function notesDialog(title: string, initialNotes: string, entityId: string, onSubmit: (notes: string, imageAssetIds: string[]) => Promise<void>) {
   const dialog = new DialogForm({}, {
     form() {
       return $FM({
@@ -366,13 +598,21 @@ function notesDialog(title: string, initialNotes: string, onSubmit: (notes: stri
                 cols: 12,
                 hint: initialNotes
                   ? `Current notes: ${initialNotes}`
-                  : 'Internal operational notes for this shop order.',
+                  : 'Share a seller/customer update for this shop order.',
+              }),
+              $FD({
+                label: 'Images',
+                storage: 'images',
+                type: 'image',
+                multiple: true,
+                cols: 12,
               }),
             ],
           }),
         ],
         saved: async (form) => {
-          await onSubmit(String(form.$master?.$get('notes') || '').trim());
+          const imageAssetIds = await uploadImageAssetIds(form, 'images', 'shop-order-update-image', entityId);
+          await onSubmit(String(form.$master?.$get('notes') || '').trim(), imageAssetIds);
           dialog.forceCancel();
         },
       });
@@ -431,7 +671,7 @@ function requestPickupHandoffButton(report: Report, pickupHandoffStatusRef: Ref<
     onClicked: async (button) => {
       try {
         const confirmed = await Dialogs.$confirm(
-          'Generate a rider pickup PIN and notify the assigned rider?',
+          'Generate a pickup PIN to confirm handoff?',
           'Start Pickup Handoff',
         );
         if (!confirmed) {
@@ -460,7 +700,7 @@ function confirmPickupHandoffPinButton(report: Report, pickupHandoffStatusRef: R
             children: () => [
               $PT({}, {
                 children: () => [
-                  $FD({ label: 'Rider PIN', storage: 'confirmationCode', type: 'text', required: true }),
+                  $FD({ label: 'Pickup PIN', storage: 'confirmationCode', type: 'text', required: true }),
                 ],
               }),
             ],
@@ -487,9 +727,7 @@ function confirmPickupHandoffPinButton(report: Report, pickupHandoffStatusRef: R
 }
 
 function completeButton(report: Report, statusRef: Ref<any>, paymentStatusRef: Ref<any>, orderData: any) {
-  const shouldCollectPayment = canShopCollectPayment(orderData) && String(paymentStatusRef.value || '').trim().toLowerCase() !== 'paid';
-
-  return $BN({ text: shouldCollectPayment ? 'Complete & Collect Payment' : 'Complete Pickup', color: 'secondary' }, {
+  return $BN({ text: 'Complete Pickup', color: 'secondary' }, {
     onClicked: async (button) => {
       const orderId = String(button.$master?.$get('id') || '');
       const pickupConfirmationCode = button.$master?.$get('pickupConfirmationCode');
@@ -517,7 +755,6 @@ function completeButton(report: Report, statusRef: Ref<any>, paymentStatusRef: R
                 try {
                   await patchOrder(orderId, {
                     orderStatus: 'completed',
-                    paymentStatus: paymentStatusRef.value === 'paid' ? 'paid' : 'pending',
                     pickupConfirmationCode: String(form.$master?.$get('confirmationCode') || '').trim(),
                   });
                   statusRef.value = 'completed';
@@ -545,7 +782,6 @@ function completeButton(report: Report, statusRef: Ref<any>, paymentStatusRef: R
       try {
         await patchOrder(orderId, {
           orderStatus: 'completed',
-          paymentStatus: paymentStatusRef.value === 'paid' ? 'paid' : 'pending',
         });
         statusRef.value = 'completed';
         await refreshReport(report);
@@ -581,18 +817,24 @@ function markPickupPaymentPaidButton(report: Report, paymentStatusRef: Ref<any>)
 }
 
 function updateNotesButton(report: Report) {
-  return $BN({ text: 'Update Notes', color: 'info' }, {
+  return $BN({ text: 'Add Update', color: 'info' }, {
     onClicked: async (button) => {
+      const orderId = String(button.$master?.$get('id') || '');
       const dialog = notesDialog(
-        'Update Order Notes',
+        'Add Order Update',
         String(button.$master?.$get('notes') || ''),
-        async (notes) => {
+        orderId,
+        async (notes, imageAssetIds) => {
           try {
-            await patchOrder(String(button.$master?.$get('id') || ''), { notes });
+            if (!notes) throw new Error('Update note is required.');
+            await Api.instance.service(`shops/${getShopId()}/orders/${orderId}/updates`).create({
+              message: notes,
+              imageAssetIds,
+            });
             await refreshReport(report);
-            Dialogs.$success('Order notes updated.');
+            Dialogs.$success('Order update added.');
           } catch (error: any) {
-            Dialogs.$error(error?.message || 'Failed to update notes.');
+            Dialogs.$error(error?.message || 'Failed to add update.');
           }
         },
       );
@@ -742,7 +984,7 @@ const createForm = () => $FM({
 export const shopOrdersReport = (orderId?: string) => () => $RP({
   title: 'Order',
   fluid: true,
-  sideButtonWidth: 220,
+  sideButtonWidth: 280,
   ...(orderId ? { objectId: orderId, objectType: getServicePath() } : {}),
 }, {
   form: createForm,
@@ -779,10 +1021,7 @@ export const shopOrdersReport = (orderId?: string) => () => $RP({
       buttons.push(readyButton(report, statusRef));
     }
 
-    if (
-      String(orderData.fulfillmentMethod || '').trim().toLowerCase() === 'delivery' &&
-      String(statusRef.value || '').trim().toLowerCase() === 'ready_for_pickup'
-    ) {
+    if (String(statusRef.value || '').trim().toLowerCase() === 'ready_for_pickup' && String(orderData.fulfillmentMethod || '').trim().toLowerCase() !== 'customer_pickup') {
       if (String(pickupHandoffStatusRef.value || 'not_requested').trim().toLowerCase() === 'not_requested') {
         buttons.push(requestPickupHandoffButton(report, pickupHandoffStatusRef));
       }
@@ -797,7 +1036,10 @@ export const shopOrdersReport = (orderId?: string) => () => $RP({
     }
 
     if (statusRef.value === 'ready_for_pickup' && String(orderData.fulfillmentMethod || '').trim().toLowerCase() === 'customer_pickup') {
-      if (!isOnlinePickupAwaitingPayment(orderData)) {
+      if (
+        !isOnlinePickupAwaitingPayment(orderData)
+        && String(paymentStatusRef.value || '').trim().toLowerCase() === 'paid'
+      ) {
         buttons.push(completeButton(report, statusRef, paymentStatusRef, orderData));
       }
     }
@@ -805,7 +1047,6 @@ export const shopOrdersReport = (orderId?: string) => () => $RP({
     if (
       canShopCollectPayment(orderData) &&
       String(paymentStatusRef.value || '').trim().toLowerCase() !== 'paid' &&
-      String(statusRef.value || '').trim().toLowerCase() !== 'ready_for_pickup' &&
       !['cancelled', 'failed', 'completed'].includes(String(statusRef.value || '').trim().toLowerCase())
     ) {
       buttons.push(markPickupPaymentPaidButton(report, paymentStatusRef));
