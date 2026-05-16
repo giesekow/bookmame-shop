@@ -7,6 +7,7 @@ import { shopCatalogMenu } from '../pages/catalog';
 import { shopDeliveryPartnersMenu } from '../pages/delivery-partners';
 import { shopFinanceSummaryReport } from '../pages/finance-summary';
 import { shopNotificationPreferencesReport } from '../pages/notification-preferences';
+import { shopDeliverySettingsReport } from '../pages/delivery-settings';
 import { shopOrdersCollection } from '../pages/orders';
 import { shopRatingsCollection } from '../pages/ratings';
 import { shopProfileReport } from '../pages/profile';
@@ -253,6 +254,17 @@ const buildSettingsMenu = () => new Menu(
         color: 'success',
       }, {
         menu: shopDeliveryPartnersMenu,
+        access: shopAccess('shop.delivery_partners.manage'),
+      }),
+      $MI({
+        text: 'Delivery Settings',
+        icon: 'mdi-truck-check-outline',
+        shortcut: 'V',
+        action: 'report',
+        mode: 'display',
+        color: 'primary',
+      }, {
+        report: shopDeliverySettingsReport,
         access: shopAccess('shop.delivery_partners.manage'),
       }),
       $MI({

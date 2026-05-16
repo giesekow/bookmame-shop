@@ -943,6 +943,60 @@ function failButton(report: Report, statusRef: Ref<any>) {
   });
 }
 
+async function fetchActiveReturnTaskForShopOrder(orderId: string): Promise<{ id: string } | null> {
+  try {
+    const tasks: any[] = await Api.instance.service('failed-delivery-tasks').find({
+      query: { sourceType: 'shop_order', sourceId: orderId },
+    })
+    return tasks?.find((t: any) => t.taskType === 'return_to_partner' && t.confirmationStatus !== 'confirmed') ?? null
+  } catch {
+    return null
+  }
+}
+
+function confirmReturnReceivedButton(report: Report, statusRef: Ref<any>) {
+  return $BN({ text: 'Confirm Return Received', color: 'success', icon: 'mdi-package-check' }, {
+    onClicked: async (button) => {
+      const orderId = String(button.$master?.$get('id') || '')
+      if (!orderId) return
+
+      const task = await fetchActiveReturnTaskForShopOrder(orderId)
+      if (!task) {
+        Dialogs.$error('No active return task found for this order.')
+        return
+      }
+
+      const dl = new DialogForm({}, {
+        form() {
+          return $FM({ title: 'Confirm Return Received', width: 500 }, {
+            children: () => [
+              $PT({}, {
+                children: () => [
+                  $FD({ label: 'Return Confirmation PIN', storage: 'confirmationCode', type: 'text', required: true, hint: 'Ask the rider for the PIN shown in the rider app.' }, {}),
+                ],
+              }),
+            ],
+            saved: async (form) => {
+              const pin = String(form.$master?.$get('confirmationCode') || '').trim()
+              if (!pin) { Dialogs.$error('PIN is required.'); return }
+              try {
+                await Api.instance.service(`failed-delivery-tasks/${task.id}/confirm-return`).create({ handoffCode: pin })
+                Dialogs.$success('Return confirmed. A refund will be initiated for the customer.')
+                await refreshReport(report)
+                statusRef.value = 'returned_to_partner'
+                dl.forceCancel()
+              } catch (err: any) {
+                Dialogs.$error(err?.message || 'Incorrect PIN or confirmation failed.')
+              }
+            },
+          })
+        },
+      })
+      AppManager.showDialog(dl)
+    },
+  });
+}
+
 const trigger = (defaultQuery: Record<string, any> = {}) => () => $TG({
   title: 'Orders',
   selectFields: ['id','orderNumber', 'customerDisplayName', 'totalAmount', 'currency', 'paymentStatus', 'orderStatus', 'placedAt'],
@@ -1011,6 +1065,11 @@ export const shopOrdersReport = (orderId?: string) => () => $RP({
     if (paymentStatusRef.value === 'paid') {
       buttons.push(printReceiptButton());
       buttons.push(downloadReceiptPdfButton());
+    }
+
+    if (statusRef.value === 'return_in_progress') {
+      buttons.push(confirmReturnReceivedButton(report, statusRef));
+      return buttons;
     }
 
     if (statusRef.value === 'placed') {
