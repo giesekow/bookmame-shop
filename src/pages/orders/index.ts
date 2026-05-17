@@ -1,10 +1,21 @@
 import { $BN, $COL, $FD, $FM, $PT, $RP, $TG, Api, AppManager, Button, DialogForm, Dialogs, Report } from 'vuetify-extended';
-import { uploadAsset } from '@bookmame/web-utils';
+import { fetchAsset, uploadAsset } from '@bookmame/web-utils';
 import { ref, Ref } from 'vue';
 import { shopAccess } from '../../misc/access';
 import { useAppStore } from '../../store/app';
 import { printReceipt, downloadReceiptPdf } from '../../misc/print-receipt';
 import { printOrderLabel } from '../../misc/order-label';
+
+;(window as any).__openShopOrderImage = async (assetId: string) => {
+  try {
+    const result = await fetchAsset(assetId, { format: 'blobUrl' });
+    if (result.blobUrl) {
+      window.open(result.blobUrl, '_blank', 'noopener');
+    }
+  } catch {
+    // asset may have been deleted or access denied
+  }
+};
 
 function getShopId() {
   const shopId = useAppStore().shop?.id;
@@ -326,6 +337,22 @@ function orderDeliveryAddress(order: any) {
   return String(order?.deliveryGeoReferenceText || '').trim() || ''
 }
 
+function renderImageLinks(imageAssetIds: unknown) {
+  const ids = Array.isArray(imageAssetIds)
+    ? imageAssetIds.map((v) => String(v || '').trim()).filter(Boolean)
+    : [];
+  if (!ids.length) return '';
+  return `
+    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
+      ${ids.map((assetId, index) => `
+        <a href="#" onclick="event.preventDefault(); window.__openShopOrderImage('${escapeHtml(assetId)}')" style="display:inline-flex; align-items:center; min-height:32px; padding:6px 10px; border:1px solid rgba(var(--v-theme-on-surface),0.18); border-radius:999px; background:rgba(var(--v-theme-on-surface),0.06); color:rgb(var(--v-theme-on-surface)); font-size:13px; font-weight:700; text-decoration:none; cursor:pointer;">
+          Image ${index + 1}
+        </a>
+      `).join('')}
+    </div>
+  `;
+}
+
 function orderUpdateAuthor(update: any) {
   const type = String(update?.authorType || update?.createdByType || '').trim().toLowerCase();
   if (['customer', 'buyer'].includes(type)) return 'Customer';
@@ -394,7 +421,7 @@ function renderOrderHtml(order: any) {
           <div class="shop-order-report__muted" style="font-size:12px;">${escapeHtml(dateTime(update?.createdAt))}</div>
         </div>
         <div class="shop-order-report__muted" style="margin-top:8px; white-space:pre-wrap;">${escapeHtml(update?.note || update?.message || '')}</div>
-        ${Array.isArray(update?.imageAssetIds) && update.imageAssetIds.length ? `<div class="shop-order-report__muted" style="margin-top:8px;">${escapeHtml(update.imageAssetIds.length)} image attachment(s)</div>` : ''}
+        ${renderImageLinks(update?.imageAssetIds)}
       </div>
     `).join('')
     : '<div class="shop-order-report__empty" style="padding:12px 0;">No seller/customer updates yet.</div>'
@@ -479,6 +506,7 @@ export async function updateShopOrderView(master: any) {
       'orderNumber',
       'currency',
       'totalAmount',
+      'voucherAppliedAmount',
       'paymentMethod',
       'paymentStatus',
       'orderStatus',
@@ -796,22 +824,61 @@ function completeButton(report: Report, statusRef: Ref<any>, paymentStatusRef: R
 function markPickupPaymentPaidButton(report: Report, paymentStatusRef: Ref<any>) {
   return $BN({ text: 'Mark Payment Paid', color: 'success' }, {
     onClicked: async (button) => {
-      const confirmed = await Dialogs.$confirm(
-        'Confirm that the customer has paid for this pickup order?',
-        'Mark payment paid',
-      );
-      if (!confirmed) {
-        return;
-      }
+      const orderId = String(button.$master?.$get('id') || '');
+      const currency = String(button.$master?.$get('currency') || 'GHS');
+      const voucherApplied = Number(button.$master?.$get('voucherAppliedAmount') || 0);
+      const totalMinor = Math.max(0, Number(button.$master?.$get('totalAmount') || 0) - voucherApplied);
+      const expectedDisplay = money(totalMinor, currency);
+      const paymentMethod = String(button.$master?.$get('paymentMethod') || '');
+      const methodLabel = paymentMethod.startsWith('card') ? 'card' : 'cash';
 
-      try {
-        await patchOrder(String(button.$master?.$get('id') || ''), { paymentStatus: 'paid' });
-        paymentStatusRef.value = 'paid';
-        await refreshReport(report);
-        Dialogs.$success('Payment marked as paid.');
-      } catch (error: any) {
-        Dialogs.$error(error?.message || 'Failed to update payment status.');
-      }
+      const dialog = new DialogForm({}, {
+        form() {
+          return $FM({
+            title: 'Mark Payment Paid',
+            width: 420,
+          }, {
+            children: () => [
+              $PT({}, {
+                children: () => [
+                  $FD({
+                    label: `Amount received (${currency})`,
+                    storage: 'amountReceived',
+                    type: 'text',
+                    required: true,
+                    hint: voucherApplied > 0
+                      ? `Total: ${money(Number(button.$master?.$get('totalAmount') || 0), currency)} − Voucher: ${money(voucherApplied, currency)} = ${expectedDisplay}. Enter the exact amount to collect.`
+                      : `Expected: ${expectedDisplay}. Enter the exact amount received from the customer.`,
+                  }),
+                ],
+              }),
+            ],
+            saved: async (form) => {
+              const raw = String(form.$master?.$get('amountReceived') || '').trim();
+              const entered = parseFloat(raw);
+              if (!Number.isFinite(entered) || entered <= 0) {
+                Dialogs.$error('Please enter a valid amount.');
+                return;
+              }
+              if (Math.round(entered * 100) !== totalMinor) {
+                Dialogs.$error(`Amount does not match. Expected ${expectedDisplay} — please collect the correct amount before confirming.`);
+                return;
+              }
+              try {
+                await patchOrder(orderId, { paymentStatus: 'paid' });
+                paymentStatusRef.value = 'paid';
+                dialog.forceCancel();
+                await refreshReport(report);
+                Dialogs.$success(`${methodLabel.charAt(0).toUpperCase() + methodLabel.slice(1)} payment of ${expectedDisplay} confirmed as received.`);
+              } catch (error: any) {
+                Dialogs.$error(error?.message || 'Failed to update payment status.');
+              }
+            },
+          });
+        },
+      });
+
+      AppManager.showDialog(dialog);
     },
   });
 }
