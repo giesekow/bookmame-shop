@@ -410,7 +410,7 @@ export const shopFinanceSummaryReport = () => {
     }),
   ]
 
-  return $RP({ title: 'Finance Summary' }, {
+  return $RP({ title: 'Finance Summary', fluid: true }, {
     form: () => $FM({ title: 'Shop Finance Summary' }, {
       children: () => [
         $PT({}, { children: () => fields }),

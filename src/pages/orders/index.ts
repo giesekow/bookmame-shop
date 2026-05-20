@@ -1130,7 +1130,7 @@ function failButton(report: Report, statusRef: Ref<any>) {
   });
 }
 
-async function fetchActiveReturnTaskForShopOrder(orderId: string): Promise<{ id: string } | null> {
+async function fetchActiveReturnTaskForShopOrder(orderId: string): Promise<{ id: string, deliveryConfirmationCode: string } | null> {
   try {
     const tasks: any[] = await Api.instance.service('failed-delivery-tasks').find({
       query: { sourceType: 'shop_order', sourceId: orderId },
@@ -1153,7 +1153,14 @@ function confirmReturnReceivedButton(report: Report, statusRef: Ref<any>) {
         return
       }
 
-      const pin = report.$master?.$get('deliveryTask.deliveryConfirmationCode')
+      const returnToPartnerTask = getReturnToPartnerTask(button.$master?.$data || {});
+      
+      const pin = String(
+        returnToPartnerTask?.deliveryConfirmationCode
+        || returnToPartnerTask?.confirmationCode
+        || '',
+      ).trim();
+
       if (!pin) {
         Dialogs.$error('No return confirmation PIN found for this order.')
         return
