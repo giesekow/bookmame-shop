@@ -313,6 +313,14 @@ function labelValue(value: unknown) {
   return String(value || 'n/a').replace(/_/g, ' ');
 }
 
+function normalizedPickupHandoffStatus(value: unknown) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || normalized === 'n/a' || normalized === 'null' || normalized === 'undefined') {
+    return 'not_requested';
+  }
+  return normalized;
+}
+
 function orderFulfillmentLabel(order: any) {
   const method = String(order?.fulfillmentMethod || '').trim().toLowerCase();
   if (method === 'delivery') {
@@ -335,6 +343,65 @@ function orderDeliveryAddress(order: any) {
     .filter(Boolean)
   if (structured.length) return structured.join(', ')
   return String(order?.deliveryGeoReferenceText || '').trim() || ''
+}
+
+function getPrimaryDeliveryTask(order: any) {
+  if (order?.deliveryTask && typeof order.deliveryTask === 'object') {
+    return order.deliveryTask;
+  }
+  const tasks = Array.isArray(order?.deliveryTasks) ? order.deliveryTasks : [];
+  return tasks[0] || null;
+}
+
+function getReturnToPartnerTask(order: any) {
+  const taskFromSingle = order?.deliveryTask && typeof order.deliveryTask === 'object'
+    ? order.deliveryTask
+    : null;
+  const tasks = Array.isArray(order?.deliveryTasks) ? order.deliveryTasks : [];
+  const combined = taskFromSingle ? [taskFromSingle, ...tasks] : tasks;
+  return combined.find((task: any) => String(task?.taskType || '').trim().toLowerCase() === 'return_to_partner') || null;
+}
+
+function deliveryStatusLabel(order: any) {
+  const primaryTask = getPrimaryDeliveryTask(order);
+  return labelValue(
+    order?.deliveryStatus
+    || order?.deliveryTaskStatus
+    || order?.activeDeliveryTaskStatus
+    || primaryTask?.status
+    || 'n/a',
+  );
+}
+
+function assignedRiderDetails(order: any) {
+  const primaryTask = getPrimaryDeliveryTask(order);
+  const rider = order?.assignedRider || primaryTask?.assignedRider || null;
+  const firstName = String(rider?.firstName || '').trim();
+  const lastName = String(rider?.lastName || '').trim();
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+  const accountId = String(
+    rider?.accountId
+    || rider?.user?.accountId
+    || rider?.id
+    || order?.assignedRiderAccountId
+    || primaryTask?.assignedRiderAccountId
+    || primaryTask?.assignedRider?.user?.accountId
+    || '',
+  ).trim();
+  const phoneNumber = String(
+    rider?.phoneNumber
+    || order?.assignedRiderPhoneNumber
+    || primaryTask?.assignedRiderPhoneNumber
+    || '',
+  ).trim();
+  const vehicleMode = String(rider?.vehicleMode || '').trim();
+  return {
+    isAssigned: Boolean(fullName || accountId),
+    name: fullName || accountId || 'Unassigned',
+    accountId,
+    phoneNumber,
+    vehicleMode,
+  };
 }
 
 function renderImageLinks(imageAssetIds: unknown) {
@@ -368,6 +435,13 @@ function renderOrderHtml(order: any) {
   const fulfillmentMethod = String(order?.fulfillmentMethod || '').trim().toLowerCase();
   const deliveryCompanyName = order?.deliveryCompany?.name || order?.deliveryEstimateSnapshot?.deliveryCompanyName || '';
   const deliveryAddress = orderDeliveryAddress(order);
+  const rider = assignedRiderDetails(order);
+  const returnToPartnerTask = getReturnToPartnerTask(order);
+  const returnConfirmationPin = String(
+    returnToPartnerTask?.deliveryConfirmationCode
+    || returnToPartnerTask?.confirmationCode
+    || '',
+  ).trim();
   const itemsHtml = items.length
     ? items.map((item: any) => `
       <div class="shop-order-report__item">
@@ -451,16 +525,25 @@ function renderOrderHtml(order: any) {
           <div class="shop-order-report__label" style="margin-bottom:8px;">Fulfillment</div>
           <div class="shop-order-report__value" style="font-weight:700;">${escapeHtml(orderFulfillmentLabel(order))}</div>
           ${fulfillmentMethod === 'delivery' && deliveryCompanyName ? `<div class="shop-order-report__muted" style="margin-top:4px;">Delivery partner: ${escapeHtml(deliveryCompanyName)}</div>` : ''}
-          ${fulfillmentMethod === 'delivery' ? `<div class="shop-order-report__muted" style="margin-top:4px;">Delivery status: ${escapeHtml(labelValue(order?.deliveryStatus))}</div>` : ''}
+          ${fulfillmentMethod === 'delivery' ? `<div class="shop-order-report__muted" style="margin-top:4px;">Delivery status: ${escapeHtml(deliveryStatusLabel(order))}</div>` : ''}
           ${fulfillmentMethod === 'delivery' && typeof order?.deliveryFeeAmount !== 'undefined' ? `<div class="shop-order-report__muted" style="margin-top:4px;">Delivery fee: ${escapeHtml(money(order.deliveryFeeAmount, order?.currency))}</div>` : ''}
           ${fulfillmentMethod === 'delivery' && deliveryAddress ? `<div class="shop-order-report__muted" style="margin-top:4px;">Address: ${escapeHtml(deliveryAddress)}</div>` : ''}
           ${fulfillmentMethod === 'customer_pickup' ? `<div class="shop-order-report__muted" style="margin-top:4px;">Customer will pick up from the shop.</div>` : ''}
+        </div>
+        <div class="shop-order-report__card">
+          <div class="shop-order-report__label" style="margin-bottom:8px;">Assigned rider</div>
+          <div class="shop-order-report__value" style="font-weight:700;">${escapeHtml(rider.name)}</div>
+          ${rider.accountId ? `<div class="shop-order-report__muted" style="margin-top:4px;">Account: ${escapeHtml(rider.accountId)}</div>` : ''}
+          ${rider.phoneNumber ? `<div class="shop-order-report__muted" style="margin-top:4px;">Phone: ${escapeHtml(rider.phoneNumber)}</div>` : ''}
+          ${rider.vehicleMode ? `<div class="shop-order-report__muted" style="margin-top:4px;">Mode: ${escapeHtml(labelValue(rider.vehicleMode))}</div>` : ''}
+          ${!rider.isAssigned ? `<div class="shop-order-report__muted" style="margin-top:4px;">No rider assigned yet.</div>` : ''}
         </div>
         <div class="shop-order-report__card">
           <div class="shop-order-report__label" style="margin-bottom:8px;">Status</div>
           <div class="shop-order-report__value" style="font-weight:700;">${escapeHtml(String(order?.orderStatus || 'placed').replace(/_/g, ' '))}</div>
           ${order?.pickupHandoffStatus ? `<div class="shop-order-report__muted" style="margin-top:4px;">Pickup handoff: ${escapeHtml(String(order.pickupHandoffStatus || 'not_requested').replace(/_/g, ' '))}</div>` : ''}
           ${order?.deliveryConfirmationStatus ? `<div class="shop-order-report__muted" style="margin-top:4px;">Delivery confirmation: ${escapeHtml(String(order.deliveryConfirmationStatus || 'not_requested').replace(/_/g, ' '))}</div>` : ''}
+          ${returnConfirmationPin ? `<div class="shop-order-report__muted" style="margin-top:4px;">Delivery confirmation PIN: <strong>${escapeHtml(returnConfirmationPin)}</strong></div>` : ''}
           ${order?.cancellationReason ? `<div class="shop-order-report__danger" style="margin-top:6px; font-size:12px;">Cancel: ${escapeHtml(order.cancellationReason)}</div>` : ''}
           ${order?.failedReason ? `<div class="shop-order-report__danger" style="margin-top:6px; font-size:12px;">Failure: ${escapeHtml(order.failedReason)}</div>` : ''}
         </div>
@@ -519,6 +602,37 @@ export async function updateShopOrderView(master: any) {
       'deliveryCompany.name',
       'deliveryFeeAmount',
       'deliveryStatus',
+      'deliveryTaskStatus',
+      'activeDeliveryTaskStatus',
+      'deliveryTask',
+      'deliveryTask.status',
+      'deliveryTask.taskType',
+      'deliveryTask.deliveryConfirmationCode',
+      'deliveryTask.assignedRider',
+      'deliveryTask.assignedRider.id',
+      'deliveryTask.assignedRider.accountId',
+      'deliveryTask.assignedRider.firstName',
+      'deliveryTask.assignedRider.lastName',
+      'deliveryTask.assignedRider.phoneNumber',
+      'deliveryTask.assignedRider.vehicleMode',
+      'deliveryTasks',
+      'deliveryTasks.taskType',
+      'deliveryTasks.status',
+      'deliveryTasks.deliveryConfirmationCode',
+      'deliveryTasks.assignedRider',
+      'deliveryTasks.assignedRider.id',
+      'deliveryTasks.assignedRider.accountId',
+      'deliveryTasks.assignedRider.firstName',
+      'deliveryTasks.assignedRider.lastName',
+      'deliveryTasks.assignedRider.phoneNumber',
+      'deliveryTasks.assignedRider.vehicleMode',
+      'assignedRider',
+      'assignedRider.id',
+      'assignedRider.accountId',
+      'assignedRider.firstName',
+      'assignedRider.lastName',
+      'assignedRider.phoneNumber',
+      'assignedRider.vehicleMode',
       'deliveryLabel',
       'deliveryAddressLine1',
       'deliveryAddressLine2',
@@ -547,6 +661,12 @@ export async function updateShopOrderView(master: any) {
       'settlements',
     ],
   });
+  master?.$set?.('orderStatus', order?.orderStatus ?? master?.$get?.('orderStatus'));
+  master?.$set?.('paymentStatus', order?.paymentStatus ?? master?.$get?.('paymentStatus'));
+  master?.$set?.('pickupHandoffStatus', order?.pickupHandoffStatus ?? master?.$get?.('pickupHandoffStatus'));
+  master?.$set?.('fulfillmentMethod', order?.fulfillmentMethod ?? master?.$get?.('fulfillmentMethod'));
+  master?.$set?.('deliveryTaskStatus', order?.deliveryTaskStatus ?? master?.$get?.('deliveryTaskStatus'));
+  master?.$set?.('assignedRiderAccountId', order?.assignedRiderAccountId ?? master?.$get?.('assignedRiderAccountId'));
   master?.$set?.('orderDetails', renderOrderHtml(order || master?.$data || {}));
 }
 
@@ -1033,33 +1153,29 @@ function confirmReturnReceivedButton(report: Report, statusRef: Ref<any>) {
         return
       }
 
-      const dl = new DialogForm({}, {
-        form() {
-          return $FM({ title: 'Confirm Return Received', width: 500 }, {
-            children: () => [
-              $PT({}, {
-                children: () => [
-                  $FD({ label: 'Return Confirmation PIN', storage: 'confirmationCode', type: 'text', required: true, hint: 'Ask the rider for the PIN shown in the rider app.' }, {}),
-                ],
-              }),
-            ],
-            saved: async (form) => {
-              const pin = String(form.$master?.$get('confirmationCode') || '').trim()
-              if (!pin) { Dialogs.$error('PIN is required.'); return }
-              try {
-                await Api.instance.service(`failed-delivery-tasks/${task.id}/confirm-return`).create({ handoffCode: pin })
-                Dialogs.$success('Return confirmed. A refund will be initiated for the customer.')
-                await refreshReport(report)
-                statusRef.value = 'returned_to_partner'
-                dl.forceCancel()
-              } catch (err: any) {
-                Dialogs.$error(err?.message || 'Incorrect PIN or confirmation failed.')
-              }
-            },
-          })
-        },
-      })
-      AppManager.showDialog(dl)
+      const pin = report.$master?.$get('deliveryTask.deliveryConfirmationCode')
+      if (!pin) {
+        Dialogs.$error('No return confirmation PIN found for this order.')
+        return
+      }
+
+      const canprocess = await Dialogs.$confirm(
+        'Are you sure you want to confirm receipt of the returned item? This will initiate a refund for the customer.',
+        'Confirm Return Received',
+      )
+      if (!canprocess) {
+        return
+      }
+
+      try {
+        await Api.instance.service(`failed-delivery-tasks/${task.id}/confirm-return`).create({ handoffCode: pin })
+        Dialogs.$success('Return confirmed. A refund will be initiated for the customer.')
+        await refreshReport(report)
+        statusRef.value = 'returned_to_partner'
+        report.forceRender()
+      } catch (err: any) {
+        Dialogs.$error(err?.message || 'Incorrect PIN or confirmation failed.')
+      }
     },
   });
 }
@@ -1121,8 +1237,10 @@ export const shopOrdersReport = (orderId?: string) => () => $RP({
   sideButtons: (_props, _ctx, report) => {
     const statusRef: Ref<any> = ref(report.$master?.$get('orderStatus'));
     const paymentStatusRef: Ref<any> = ref(report.$master?.$get('paymentStatus'));
-    const pickupHandoffStatusRef: Ref<any> = ref(report.$master?.$get('pickupHandoffStatus'));
+    const pickupHandoffStatusRef: Ref<any> = ref(report.$master?.$get('deliveryTask.pickupHandoffStatus'));
+    const returnDeliveryConfirmationStatusRef: Ref<any> = ref(report.$master?.$get('deliveryTask.deliveryConfirmationStatus'));
     const orderData = report.$master?.$data || {};
+    console.log(orderData)
     const buttons: Button[] = [];
 
     buttons.push(refreshButton(report));
@@ -1134,7 +1252,7 @@ export const shopOrdersReport = (orderId?: string) => () => $RP({
       buttons.push(downloadReceiptPdfButton());
     }
 
-    if (statusRef.value === 'return_in_progress') {
+    if (statusRef.value === 'return_in_progress' && returnDeliveryConfirmationStatusRef.value === 'requested') {
       buttons.push(confirmReturnReceivedButton(report, statusRef));
       return buttons;
     }
@@ -1148,10 +1266,11 @@ export const shopOrdersReport = (orderId?: string) => () => $RP({
     }
 
     if (String(statusRef.value || '').trim().toLowerCase() === 'ready_for_pickup' && String(orderData.fulfillmentMethod || '').trim().toLowerCase() !== 'customer_pickup') {
-      if (String(pickupHandoffStatusRef.value || 'not_requested').trim().toLowerCase() === 'not_requested') {
+      const handoffStatus = normalizedPickupHandoffStatus(pickupHandoffStatusRef.value);
+      if (handoffStatus === 'not_requested') {
         buttons.push(requestPickupHandoffButton(report, pickupHandoffStatusRef));
       }
-      if (String(pickupHandoffStatusRef.value || '').trim().toLowerCase() === 'requested') {
+      if (handoffStatus === 'requested') {
         buttons.push(confirmPickupHandoffPinButton(report, pickupHandoffStatusRef));
       }
     }
