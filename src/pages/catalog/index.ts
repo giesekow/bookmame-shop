@@ -227,5 +227,8 @@ export const shopCatalogCollection = () => $COL({
 export const shopCatalogMenu = () => makeCollectionMenu({
   title: 'Catalog',
   collection: shopCatalogCollection,
+  accessCreate: shopAccess('shop.catalog.manage'),
+  accessEdit: shopAccess('shop.catalog.manage'),
+  accessDisplay: shopAccess('shop.catalog.view'),
   access: shopAccess('shop.catalog.view'),
 })

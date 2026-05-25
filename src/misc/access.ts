@@ -21,9 +21,15 @@ export const SHOP_PERMISSION_OPTIONS = [
   { id: 'shop.dashboard.view', name: 'Dashboard' },
   { id: 'shop.profile.view', name: 'Profile' },
   { id: 'shop.catalog.view', name: 'Catalog' },
+  { id: 'shop.catalog.manage', name: 'Catalog Actions' },
   { id: 'shop.delivery_partners.manage', name: 'Delivery Partners' },
   { id: 'shop.orders.view', name: 'Orders' },
+  { id: 'shop.orders.manage', name: 'Order Actions' },
+  { id: 'shop.support_cases.view', name: 'Support Cases' },
+  { id: 'shop.support_cases.manage', name: 'Support Case Actions' },
+  { id: 'shop.staff.manage', name: 'Staff' },
   { id: 'shop.finance.view', name: 'Finance' },
+  { id: 'shop.finance.execute', name: 'Finance Actions' },
   { id: 'shop.notifications.view', name: 'Notifications' },
 ];
 

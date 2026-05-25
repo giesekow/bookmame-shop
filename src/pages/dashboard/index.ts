@@ -359,7 +359,7 @@ export const SHOP_DASHBOARD_WIDGET = $DB({
     }, {
       value: async () => (await loadDashboardSummary()).openSupportCaseCount,
       onClicked: async () => {
-        if (await shopHasAccess('shop.orders.view')) {
+        if (await shopHasAccess('shop.support_cases.view')) {
           openSupportCasesCollection()
         }
       },
@@ -554,6 +554,10 @@ export const SHOP_DASHBOARD_WIDGET = $DB({
                 actionText: 'Open',
                 actionColor: 'warning',
               },
+            ]
+          : []),
+        ...(await shopHasAccess('shop.support_cases.view')
+          ? [
               {
                 key: 'support',
                 title: 'Support Cases',

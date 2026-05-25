@@ -12,6 +12,7 @@ import { shopOrdersCollection } from '../pages/orders';
 import { shopRatingsCollection } from '../pages/ratings';
 import { shopProfileReport } from '../pages/profile';
 import { supportCasesCollection } from '../pages/support-cases';
+import { shopStaffMenu } from '../pages/staff';
 import { shopCancellationRefundsCollection } from '../pages/cancellation-refunds';
 import { shopRemittanceBatchesCollection, shopSettlementBatchesCollection } from '../pages/settlement-batches';
 import { shopRemittanceHistoryCollection, shopSettlementHistoryCollection } from '../pages/settlement-history';
@@ -78,7 +79,7 @@ export function buildHomeMenu() {
           color: 'warning',
         }, {
           collection: supportCasesCollection,
-          access: shopAccess('shop.orders.view'),
+          access: shopAccess('shop.support_cases.view'),
         }),
         $MI({
           text: 'Finance',
@@ -100,6 +101,7 @@ export function buildHomeMenu() {
           menu: buildSettingsMenu,
           access: async () =>
             (await shopHasAccess('shop.profile.view')) ||
+            (await shopHasAccess('shop.staff.manage')) ||
             (await shopHasAccess('shop.notifications.view')),
         }),
       ],
@@ -266,6 +268,16 @@ const buildSettingsMenu = () => new Menu(
       }, {
         report: shopDeliverySettingsReport,
         access: shopAccess('shop.delivery_partners.manage'),
+      }),
+      $MI({
+        text: 'Staff',
+        icon: 'mdi-account-group-outline',
+        shortcut: 'S',
+        action: 'menu',
+        color: 'warning',
+      }, {
+        menu: shopStaffMenu,
+        access: shopAccess('shop.staff.manage'),
       }),
       $MI({
         text: 'Notifications',
