@@ -16,6 +16,7 @@ import { shopStaffMenu } from '../pages/staff';
 import { shopCancellationRefundsCollection } from '../pages/cancellation-refunds';
 import { shopRemittanceBatchesCollection, shopSettlementBatchesCollection } from '../pages/settlement-batches';
 import { shopRemittanceHistoryCollection, shopSettlementHistoryCollection } from '../pages/settlement-history';
+import { shopInvoicesCollection } from '../pages/invoices';
 
 export function buildHomeMenu() {
   return new Menu(
@@ -168,6 +169,17 @@ const buildFinanceMenu = () => new Menu(
         color: 'primary',
       }, {
         report: shopFinanceSummaryReport,
+        access: shopAccess('shop.finance.view'),
+      }),
+      $MI({
+        text: 'Invoices',
+        icon: 'mdi-file-document-multiple-outline',
+        shortcut: 'I',
+        action: 'collection',
+        mode: 'display',
+        color: 'secondary',
+      }, {
+        collection: () => shopInvoicesCollection(),
         access: shopAccess('shop.finance.view'),
       }),
       $MI({
