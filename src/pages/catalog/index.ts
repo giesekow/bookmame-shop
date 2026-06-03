@@ -44,6 +44,12 @@ function getServicePath() {
   return `shops/${getShopId()}/products`
 }
 
+function parseTags(value: any) {
+  return Array.from(
+    new Set(value),
+  ).slice(0, 20)
+}
+
 async function fetchCategoryOptions() {
   const response = await Api.instance.service(`shops/${getShopId()}/categories`).find({
     query: {
@@ -110,6 +116,18 @@ const createForm = () => {
     $FD({ label: 'Applicable Delivery Partners', type: 'select', storage: 'applicableDeliveryCompanyIds', multiple: true, cols: 12, hint: 'Leave empty to inherit all active shop delivery partners. Select specific partners only when a product needs delivery restrictions.' }, {
       selectOptions: async () => fetchDeliveryPartnerOptions(),
     }),
+    $FD({
+      label: 'Search Tags',
+      storage: 'tags',
+      type: 'text',
+      multiple: true,
+      cols: 12,
+      hint: 'Optional keywords customers may search for. enter the text and press Enter to add a tag.',
+      placeholder: 'iphone, charger, fast charging, travel',
+      validation: {
+        maxLen: 20
+      }
+    }),
     $FD({ label: 'Sort Order', type: 'integer', storage: 'sortOrder' }),
     $FD({ label: 'Status', type: 'select', storage: 'status' }, {
       selectOptions: makeConstantOptions('shop-product-statuses'),
@@ -123,6 +141,10 @@ const createForm = () => {
   return $FM({
     title: 'Catalog Product',
   }, {
+    saved(form) {
+      const tags = form.$master?.$get?.('tags', [])
+      form.$master?.$set?.('tags', parseTags(tags))
+    },
     children: () => [
       $PT({}, {
         children: () => fields,
