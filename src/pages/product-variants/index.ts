@@ -1,9 +1,18 @@
-import { resolveIdToImage, resolveImageToId, makeConstantOptions } from '@bookmame/web-utils'
-import { $BN, $COL, $FD, $FM, $PT, $RP, $TG, AppManager } from 'vuetify-extended'
+import { resolveIdToImage, resolveImageToId, makeConstantOptions, formatMoney } from '@bookmame/web-utils'
+import { $BN, $COL, $FD, $FM, $PT, $RP, $TG, Api, AppManager } from 'vuetify-extended'
 import { shopAccess } from '../../misc/access'
 
 function servicePath(shopId: string, productId: string) {
   return `shops/${shopId}/products/${productId}/variants`
+}
+
+async function fetchDeliveryClassOptions(shopId: string) {
+  const shop = await Api.instance.service('shops').get(shopId) as any
+  const items = Array.isArray(shop?.supportedDeliveryClasses) ? shop.supportedDeliveryClasses : []
+  return items.map((item: any) => ({
+    id: item.id,
+    name: item.name || item.code || item.id,
+  }))
 }
 
 function variantAttributesField(storage = 'attributes', label = 'Variant Attributes') {
@@ -50,6 +59,14 @@ export const shopProductVariantsReport = (shopId: string, productId: string) => 
           $FD({ label: 'Enabled', type: 'boolean', storage: 'enabled' }),
           $FD({ label: 'Available', type: 'boolean', storage: 'isAvailable' }),
           $FD({ label: 'Variant Price Amount', type: 'integer', storage: 'priceAmount', required: true, hint: 'Minor unit amount.' }),
+          $FD({ label: 'Delivery Class', type: 'select', storage: 'deliveryClassId', hint: 'Optional override. Leave blank to inherit the base product delivery metadata.' }, {
+            selectOptions: async () => fetchDeliveryClassOptions(shopId),
+          }),
+          $FD({ label: 'Weight (grams)', type: 'integer', storage: 'weightGrams' }),
+          $FD({ label: 'Length (cm)', type: 'integer', storage: 'lengthCm' }),
+          $FD({ label: 'Width (cm)', type: 'integer', storage: 'widthCm' }),
+          $FD({ label: 'Height (cm)', type: 'integer', storage: 'heightCm' }),
+          $FD({ label: 'Declared Value Amount', type: 'integer', storage: 'declaredValueAmount', hint: 'Optional. Collected now for future insurance-related flows.' }),
           $FD({ label: 'Inventory Quantity', type: 'integer', storage: 'inventoryQuantity' }),
           $FD({ label: 'Sort Order', type: 'integer', storage: 'sortOrder' }),
           $FD({ label: 'Variant Image', type: 'image', storage: 'image' }),
@@ -101,12 +118,13 @@ export const shopProductVariantsCollection = (shopId: string, productId: string)
 }, {
   trigger: () => $TG({
     title: 'Product Variants',
-    selectFields: ['name', 'slug', 'sku', 'priceAmount', 'inventoryQuantity', 'status', 'enabled', 'isAvailable', 'sortOrder', 'createdAt', 'id'],
+    selectFields: ['name', 'slug', 'sku', 'priceAmount', 'product.currency', 'inventoryQuantity', 'status', 'enabled', 'isAvailable', 'sortOrder', 'createdAt', 'id'],
     headers: [
       { title: 'Name', value: 'name' },
       { title: 'Slug', value: 'slug' },
       { title: 'SKU', value: 'sku' },
       { title: 'Price', value: 'priceAmount' },
+      { title: 'Currency', value: 'product.currency' },
       { title: 'Inventory', value: 'inventoryQuantity' },
       { title: 'Status', value: 'status' },
       { title: 'Enabled', value: 'enabled' },
@@ -116,6 +134,12 @@ export const shopProductVariantsCollection = (shopId: string, productId: string)
     ],
     sideButtonWidth: 180,
   }, {
+    format(_, items) {
+      for (const item of items) {
+        item.priceAmount = formatMoney(item.priceAmount, item.product?.currency)
+      }
+      return items
+    },
     sideButtons: (props, context, trigger) => trigger.$params.mode === 'edit' ? [
       $BN({ text: 'Add Variant', icon: 'mdi-plus', color: 'success' }, {
         onClicked() {

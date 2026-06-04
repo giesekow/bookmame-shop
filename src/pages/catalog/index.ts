@@ -1,4 +1,4 @@
-import { makeConstantOptions, resolveIdToImage, resolveImageToId } from '@bookmame/web-utils'
+import { formatMoney, makeConstantOptions, resolveIdToImage, resolveImageToId } from '@bookmame/web-utils'
 import { $BN, $COL, $FD, $FM, $PT, $RP, $TG, Api, AppManager, Field, Part } from 'vuetify-extended'
 import { shopAccess } from '../../misc/access'
 import { makeCollectionMenu } from '../../misc/menu'
@@ -82,6 +82,15 @@ async function fetchDeliveryPartnerOptions() {
     }))
 }
 
+async function fetchDeliveryClassOptions() {
+  const shop = await Api.instance.service('shops').get(getShopId()) as any
+  const items = Array.isArray(shop?.supportedDeliveryClasses) ? shop.supportedDeliveryClasses : []
+  return items.map((item: any) => ({
+    id: item.id,
+    name: item.name || item.code || item.id,
+  }))
+}
+
 const trigger = () => $TG({
   title: 'Catalog Products',
   selectFields: ['name', 'categoryLabel', 'priceAmount', 'currency', 'inventoryQuantity', 'status', 'enabled', 'isAvailable', 'createdAt', 'id'],
@@ -96,6 +105,13 @@ const trigger = () => $TG({
     { title: 'Available', value: 'isAvailable' },
     { title: 'Created', value: 'createdAt' },
   ],
+}, {
+  format(_, items) {
+    for (const item of items) {
+      item.priceAmount = formatMoney(item.priceAmount, item.currency)
+    }
+    return items
+  },
 })
 
 const createForm = () => {
@@ -112,6 +128,14 @@ const createForm = () => {
       selectOptions: makeConstantOptions('currencies'),
       default: () => useAppStore().shop?.defaultCurrencyCode,
     }),
+    $FD({ label: 'Delivery Class', type: 'select', storage: 'deliveryClassId', hint: 'Required when this shop supports delivery. Choose from the approved shop delivery classes.' }, {
+      selectOptions: fetchDeliveryClassOptions,
+    }),
+    $FD({ label: 'Weight (grams)', type: 'integer', storage: 'weightGrams' }),
+    $FD({ label: 'Length (cm)', type: 'integer', storage: 'lengthCm' }),
+    $FD({ label: 'Width (cm)', type: 'integer', storage: 'widthCm' }),
+    $FD({ label: 'Height (cm)', type: 'integer', storage: 'heightCm' }),
+    $FD({ label: 'Declared Value Amount', type: 'integer', storage: 'declaredValueAmount', hint: 'Optional. Collected now for future insurance-related flows.' }),
     $FD({ label: 'Inventory Quantity', type: 'integer', storage: 'inventoryQuantity' }),
     $FD({ label: 'Applicable Delivery Partners', type: 'select', storage: 'applicableDeliveryCompanyIds', multiple: true, cols: 12, hint: 'Leave empty to inherit all active shop delivery partners. Select specific partners only when a product needs delivery restrictions.' }, {
       selectOptions: async () => fetchDeliveryPartnerOptions(),
