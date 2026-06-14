@@ -167,13 +167,13 @@ function ratingValue(value?: number | null) {
     : 'No ratings yet'
 }
 
-function openOrdersCollection() {
+export function openOrdersCollection() {
   const coll = shopOrdersCollection()()
   coll.$params.mode = 'display'
   AppManager.showCollection(coll)
 }
 
-function openPendingOrdersCollection() {
+export function openPendingOrdersCollection() {
   const coll = shopOrdersCollection({
     orderStatus: {
       $in: ['placed', 'accepted', 'ready_for_pickup'],
@@ -183,7 +183,7 @@ function openPendingOrdersCollection() {
   AppManager.showCollection(coll)
 }
 
-function openOrder(orderId?: string) {
+export function openOrder(orderId?: string) {
   if (!orderId) {
     openOrdersCollection()
     return
@@ -194,15 +194,15 @@ function openOrder(orderId?: string) {
   AppManager.showReport(report)
 }
 
-function openRatingsCollection() {
+export function openRatingsCollection() {
   AppManager.showCollection(shopRatingsCollection())
 }
 
-function openSupportCasesCollection() {
+export function openSupportCasesCollection() {
   AppManager.showCollection(supportCasesCollection())
 }
 
-function openFinanceSummaryReport() {
+export function openFinanceSummaryReport() {
   AppManager.showReport(shopFinanceSummaryReport())
 }
 
