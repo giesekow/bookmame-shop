@@ -32,6 +32,207 @@ function productAttributesField(storage = 'attributes', label = 'Product Attribu
   })
 }
 
+type MarketplaceAttributeDefinition = {
+  id: string
+  label: string
+  description?: string | null
+  dataType: string
+  unitGroup?: string | null
+  isRequired: boolean
+  isVariantDefining: boolean
+  categoryLabel: string
+  options: Array<{ code: string; label: string }>
+}
+
+const marketplaceAttributeDefinitions = new Map<string, MarketplaceAttributeDefinition>()
+const selectedMarketplaceDefinitionByField = new WeakMap<Field, string>()
+
+function normalizeMarketplaceDateValue(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return value
+  return new Date(value * 86_400_000).toISOString().slice(0, 10)
+}
+
+function updateMarketplaceValueFieldVisibility(field: Field, dataType: string) {
+  const update = (ref: string, visible: boolean, extra: Record<string, unknown> = {}) => {
+    const target = field.$refs[ref]
+    if (target) target.setParams({ ...target.$params, invisible: !visible, ...extra })
+  }
+  update('marketplaceRawValue', ['text', 'integer', 'decimal', 'date', 'measurement', 'color'].includes(dataType), {
+    type: dataType === 'integer' ? 'integer' : ['decimal', 'measurement'].includes(dataType) ? 'float' : dataType === 'date' ? 'date' : 'text',
+  })
+  update('marketplaceColorValue', dataType === 'color')
+  update('marketplaceOptionValues', ['single_option', 'multiple_option'].includes(dataType), { multiple: dataType === 'multiple_option' })
+  update('marketplaceBooleanValue', dataType === 'boolean')
+  update('marketplaceUnit', dataType === 'measurement')
+}
+
+async function fetchMarketplaceAttributeDefinitions(categoryId: string, variantDefining = false) {
+  if (!categoryId) return []
+  const response = await Api.instance.service(`shops/${getShopId()}/categories/${categoryId}/marketplace-attributes`).find({
+    query: { $paginate: false },
+  }) as any
+  const rows = (Array.isArray(response) ? response : response?.data || []) as MarketplaceAttributeDefinition[]
+  rows.forEach((row) => marketplaceAttributeDefinitions.set(row.id, row))
+  return rows.filter((row) => Boolean(row.isVariantDefining) === variantDefining)
+}
+
+async function fetchUnitOptions(definitionId: string) {
+  const definition = marketplaceAttributeDefinitions.get(definitionId)
+  if (!definition?.unitGroup) return []
+  const response = await Api.instance.service('reference-data/units').find({ query: { $paginate: false } }) as any
+  const rows = Array.isArray(response) ? response : response?.data || []
+  return rows
+    .filter((row: any) => row.unitGroup === definition.unitGroup)
+    .map((row: any) => ({ id: row.id, name: `${row.name} (${row.symbol})` }))
+}
+
+function normalizeMarketplaceAttributeRows(rows: any[]) {
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const definition = marketplaceAttributeDefinitions.get(row.attributeDefinitionId)
+    const dataType = definition?.dataType || row.dataType
+    const value = dataType === 'single_option'
+      ? (Array.isArray(row.optionValues) ? row.optionValues[0] : row.optionValues)
+      : dataType === 'multiple_option'
+        ? (Array.isArray(row.optionValues) ? row.optionValues : [])
+        : dataType === 'boolean'
+          ? row.booleanValue
+          : dataType === 'date'
+            ? normalizeMarketplaceDateValue(row.rawValue ?? row.inputValue ?? row.value)
+            : row.rawValue ?? row.inputValue ?? row.value
+    return {
+      ...row,
+      dataType,
+      colorValue: dataType === 'color' ? (row.rawValue ?? row.inputValue ?? row.value) : undefined,
+      value,
+      valueLabel: marketplaceAttributeValueLabel({ ...row, dataType, value }),
+      unitId: dataType === 'measurement' ? row.unitId : undefined,
+    }
+  })
+}
+
+function marketplaceAttributeValueLabel(row: any) {
+  const definition = marketplaceAttributeDefinitions.get(String(row.attributeDefinitionId || ''))
+  if (row.dataType === 'single_option' || row.dataType === 'multiple_option') {
+    const selected: unknown[] = Array.isArray(row.optionValues) ? row.optionValues : [row.optionValues]
+    const labels = new Map((definition?.options || []).map((option) => [option.code, option.label]))
+    return selected.filter(Boolean).map((code: unknown) => labels.get(String(code)) || String(code)).join(', ')
+  }
+  if (row.dataType === 'boolean') return row.booleanValue === true ? 'Yes' : row.booleanValue === false ? 'No' : ''
+  const value = row.dataType === 'date'
+    ? normalizeMarketplaceDateValue(row.rawValue ?? row.inputValue ?? row.value)
+    : row.rawValue ?? row.inputValue ?? row.value
+  return value == null ? '' : String(value)
+}
+
+function hydrateMarketplaceAttributeRows(rows: any[]) {
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    ...row,
+    rawValue: ['single_option', 'multiple_option', 'boolean'].includes(row.dataType) ? undefined : row.inputValue,
+    colorValue: row.dataType === 'color' ? row.inputValue : undefined,
+    optionValues: row.dataType === 'single_option'
+      ? (row.inputValue ? [row.inputValue] : [])
+      : row.dataType === 'multiple_option'
+        ? row.inputValue || []
+        : [],
+    booleanValue: row.dataType === 'boolean' ? row.inputValue : undefined,
+    value: row.inputValue,
+  }))
+}
+
+function marketplaceAttributesField(categoryId: () => string | undefined) {
+  return $FD({
+    label: 'Marketplace Category Attributes',
+    storage: 'marketplaceAttributes',
+    type: 'collection',
+    cols: 12,
+    hint: 'Structured attributes come from the linked global marketplace category. Additional free-entry attributes remain available below.',
+  }, {
+    headers() {
+      return [
+        { title: 'Attribute', value: 'label' },
+        { title: 'Value', value: 'valueLabel' },
+        { title: 'Origin', value: 'categoryLabel' },
+      ]
+    },
+    form() {
+      return $FM({}, {
+        saved(form) {
+          const master = form.$master
+          master?.$set('valueLabel', marketplaceAttributeValueLabel({
+            attributeDefinitionId: master?.$get('attributeDefinitionId'),
+            dataType: master?.$get('dataType'),
+            optionValues: master?.$get('optionValues'),
+            booleanValue: master?.$get('booleanValue'),
+            rawValue: master?.$get('rawValue'),
+          }))
+        },
+        children: () => [$PT({}, {
+          children: () => [
+            $FD({ label: 'Attribute', storage: 'attributeDefinitionId', type: 'select', required: true }, {
+              selectOptions: async () => (await fetchMarketplaceAttributeDefinitions(categoryId() || '')).map((definition) => ({
+                id: definition.id,
+                name: `${definition.label}${definition.isRequired ? ' *' : ''} (${definition.categoryLabel})`,
+              })),
+              changed(field) {
+                const definitionId = String(field.$value || '')
+                const definition = marketplaceAttributeDefinitions.get(definitionId)
+                if (!definition) return
+                const previousDefinitionId = selectedMarketplaceDefinitionByField.get(field)
+                selectedMarketplaceDefinitionByField.set(field, definitionId)
+                field.$master?.$set('label', definition.label)
+                field.$master?.$set('categoryLabel', definition.categoryLabel)
+                field.$master?.$set('dataType', definition.dataType)
+                field.$master?.$set('attributeDescription', definition.description || 'No additional guidance.')
+                updateMarketplaceValueFieldVisibility(field, definition.dataType)
+                if (previousDefinitionId && previousDefinitionId !== definitionId) {
+                  field.$master?.$set('rawValue', undefined)
+                  field.$master?.$set('colorValue', undefined)
+                  field.$master?.$set('optionValues', [])
+                  field.$master?.$set('booleanValue', undefined)
+                  field.$master?.$set('unitId', undefined)
+                  field.$master?.$set('value', undefined)
+                  field.$master?.$set('valueLabel', '')
+                }
+                field.$refs.marketplaceOptionValues?.loadOptions?.()
+                field.$refs.marketplaceUnit?.loadOptions?.()
+              },
+              setup(field) {
+                Promise.resolve().then(() => {
+                  const definitionId = String(field.$value || '')
+                  const definition = marketplaceAttributeDefinitions.get(definitionId)
+                  if (definition) {
+                    selectedMarketplaceDefinitionByField.set(field, definitionId)
+                    updateMarketplaceValueFieldVisibility(field, definition.dataType)
+                  }
+                })
+              },
+            }),
+            $FD({ label: 'Guidance', storage: 'attributeDescription', type: 'textarea', readonly: true }),
+            $FD({ ref: 'marketplaceRawValue', label: 'Value', storage: 'rawValue', hint: 'For colors, pick a swatch or enter a hexadecimal value such as #1A73E8.' }),
+            $FD({ ref: 'marketplaceColorValue', label: 'Color Picker', storage: 'colorValue', type: 'color', invisible: true }, {
+              changed(field) {
+                if (field.$value) field.$master?.$set('rawValue', field.$value)
+              },
+            }),
+            $FD({ ref: 'marketplaceOptionValues', label: 'Option Value', storage: 'optionValues', type: 'select', multiple: true, invisible: true }, {
+              selectOptions: async (field) => {
+                const definition = marketplaceAttributeDefinitions.get(String(field.$master?.$get('attributeDefinitionId') || ''))
+                return (definition?.options || []).map((option) => ({ id: option.code, name: option.label }))
+              },
+            }),
+            $FD({ ref: 'marketplaceBooleanValue', label: 'Yes / No', storage: 'booleanValue', type: 'select', clearable: true, invisible: true }, {
+              selectOptions: async () => [{ id: true, name: 'Yes' }, { id: false, name: 'No' }],
+            }),
+            $FD({ ref: 'marketplaceUnit', label: 'Unit', storage: 'unitId', type: 'select', clearable: true, invisible: true }, {
+              selectOptions: async (field) => fetchUnitOptions(String(field.$master?.$get('attributeDefinitionId') || '')),
+            }),
+          ],
+        })],
+      })
+    },
+  })
+}
+
 function getShopId() {
   const shopId = useAppStore().shop?.id
   if (!shopId) {
@@ -115,10 +316,32 @@ const trigger = () => $TG({
 })
 
 const createForm = () => {
+  const fm = $FM({
+    title: 'Catalog Product',
+  }, {
+    saved(form) {
+      const tags = form.$master?.$get?.('tags', [])
+      form.$master?.$set?.('tags', parseTags(tags))
+      const rows = form.$master?.$get?.('marketplaceAttributes', [])
+      form.$master?.$set?.('marketplaceAttributes', normalizeMarketplaceAttributeRows(rows))
+    },
+    children: () => [
+      $PT({}, {
+        children: () => fields,
+      }),
+    ],
+    bottomChildren: () => [
+      $PT({}, {
+        children: () => [
+          $FD({ label: 'Description', type: 'textarea', storage: 'description' }),
+        ],
+      }),
+    ],
+  })
   const fields: (Field | Part)[] = [
     $FD({ label: 'Name', type: 'text', storage: 'name', required: true }),
     $FD({ label: 'Slug', type: 'text', storage: 'slug', required: true }),
-    $FD({ label: 'Category', type: 'select', storage: 'categoryId', hint: 'Assign the product to a managed catalog category.' }, {
+    $FD({ label: 'Category', type: 'select', storage: 'categoryId', hint: 'Changing category may make marketplace attributes incompatible. Resolve any listed conflicts before saving; existing values are never deleted automatically.' }, {
       selectOptions: async () => fetchCategoryOptions(),
     }),
     $FD({ label: 'Legacy Category Label', type: 'text', storage: 'categoryLabel', hint: 'Optional fallback label when no category record is selected.' }),
@@ -159,29 +382,10 @@ const createForm = () => {
     $FD({ label: 'Enabled', type: 'boolean', storage: 'enabled' }),
     $FD({ label: 'Available', type: 'boolean', storage: 'isAvailable' }),
     $FD({ label: 'Primary Image', type: 'image', storage: 'image' }),
-    productAttributesField(),
+    marketplaceAttributesField(() => fm.$master?.$get('categoryId')),
+    productAttributesField('attributes', 'Additional Attributes'),
   ]
-
-  return $FM({
-    title: 'Catalog Product',
-  }, {
-    saved(form) {
-      const tags = form.$master?.$get?.('tags', [])
-      form.$master?.$set?.('tags', parseTags(tags))
-    },
-    children: () => [
-      $PT({}, {
-        children: () => fields,
-      }),
-    ],
-    bottomChildren: () => [
-      $PT({}, {
-        children: () => [
-          $FD({ label: 'Description', type: 'textarea', storage: 'description' }),
-        ],
-      }),
-    ],
-  })
+  return fm
 }
 
 export const shopCatalogReport = () => $RP({
@@ -205,6 +409,8 @@ export const shopCatalogReport = () => $RP({
       idField: 'imageAssetId',
       cacheField: 'imageCache',
     })(report)
+    const rows = report.$master?.$get('marketplaceAttributes', [])
+    report.$master?.$set('marketplaceAttributes', hydrateMarketplaceAttributeRows(rows))
   },
   saved: async (report) => {
     report.$master!.$temporary = ['image']
